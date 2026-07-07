@@ -4,6 +4,8 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 
 <p align="center">
   <img src="watch_face_clean_blue.png" width="280" alt="Aviator Chrono watch face"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/icon_preview.png" width="120" alt="Aviator Chrono app icon"/>
 </p>
 
 ---

@@ -40,7 +40,6 @@ fun AviatorDial(
     minuteAngleDeg: Float,
     secondAngleDeg: Float?,
     chronoAngleDeg: Float?,
-    chronoAlpha: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -75,9 +74,9 @@ fun AviatorDial(
             drawSecondHand(center, radius * 0.84f, radius * 0.22f, it, Orange)
         }
 
-        // Chrono sweep — on top of all hands; semi-transparent when not in chrono mode
+        // Chrono sweep — on top of all hands
         chronoAngleDeg?.let {
-            drawChronoSweep(center, radius * 0.62f, it, Orange.copy(alpha = chronoAlpha), planeBitmap)
+            drawChronoSweep(center, radius * 0.62f, it, Orange, planeBitmap)
         }
 
         // Hub — topmost, covers all hand pivot points
@@ -209,8 +208,6 @@ private fun DrawScope.drawChronoSweep(
         postRotate(angleDeg)
         postTranslate(tip.x, tip.y)
     }
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        alpha = (color.alpha * 255).toInt()
-    }
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     drawIntoCanvas { it.nativeCanvas.drawBitmap(planeBitmap, matrix, paint) }
 }

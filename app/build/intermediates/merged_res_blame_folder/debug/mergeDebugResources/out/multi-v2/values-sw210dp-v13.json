@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.aviatorchrono.app-mergeDebugResources-45:/values-sw210dp-v13/values-sw210dp-v13.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\Anders Qvarfordt\\.gradle\\caches\\9.3.0\\transforms\\ef4386af724a181553374e63c043e08f\\workspace\\transformed\\wear-1.3.0\\res\\values-sw210dp-v13\\values-sw210dp-v13.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,126,198,265",
+                        "endColumns": "70,71,66,54",
+                        "endOffsets": "121,193,260,315"
+                    }
+                }
+            ]
+        }
+    ]
+}

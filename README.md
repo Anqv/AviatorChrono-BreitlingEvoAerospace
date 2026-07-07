@@ -103,6 +103,8 @@ AviatorChronoApp/
         └── SevenSegmentDisplay.kt     7-segment digit renderer (auto-fits to panel size)
 ```
 
+For a full breakdown of architecture, state machine, rendering pipeline, colour tokens, LCD geometry, and extension points see **[docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)**.
+
 ---
 
 ## Why an app instead of a watch face

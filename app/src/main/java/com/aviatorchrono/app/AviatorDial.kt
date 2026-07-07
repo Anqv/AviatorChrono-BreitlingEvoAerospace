@@ -209,6 +209,8 @@ private fun DrawScope.drawChronoSweep(
         postRotate(angleDeg)
         postTranslate(tip.x, tip.y)
     }
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        alpha = (color.alpha * 255).toInt()
+    }
     drawIntoCanvas { it.nativeCanvas.drawBitmap(planeBitmap, matrix, paint) }
 }

@@ -38,8 +38,6 @@ class ChronoState {
     var parkedMode by mutableStateOf(false)
         private set
 
-    private var lastStopAtMs: Long = 0L
-
     val isNavigationActive: Boolean
         get() = lockPreference == LockPreference.AUTO &&
                 running &&
@@ -51,19 +49,12 @@ class ChronoState {
     fun currentElapsedMs(nowMs: Long): Long =
         if (running) elapsedMs + (nowMs - startedAtMs) else elapsedMs
 
+    // 3-state cycle on every tap:  running → stopped → zero → running → …
     fun toggleStartStop(nowMs: Long) {
-        if (running) {
-            elapsedMs += nowMs - startedAtMs
-            running = false
-            lastStopAtMs = nowMs
-        } else {
-            if (nowMs - lastStopAtMs < 400 && elapsedMs > 0) {
-                elapsedMs = 0L
-                lastStopAtMs = 0L
-                return
-            }
-            startedAtMs = nowMs
-            running = true
+        when {
+            running      -> { elapsedMs += nowMs - startedAtMs; running = false }
+            elapsedMs > 0 -> { elapsedMs = 0L }
+            else          -> { startedAtMs = nowMs; running = true }
         }
     }
 

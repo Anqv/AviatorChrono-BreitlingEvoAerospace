@@ -51,12 +51,15 @@ fun AviatorDial(
         val center = Offset(size.width / 2f, size.height / 2f)
         val radius = size.minDimension / 2f - 4f
 
-        // Chrono sweep with JAS airplane tip — drawn under main hands
-        chronoAngleDeg?.let {
-            drawChronoSweep(center, radius * 0.62f, it, Orange.copy(alpha = 0.9f), planeBitmap)
-        }
-
-        // Minute hand — longer, slightly narrower sword
+        // Hour and minute sword hands — bottom of stack
+        drawSwordHand(
+            center     = center,
+            length     = radius * 0.50f,
+            angleDeg   = hourAngleDeg,
+            maxWidth   = radius * 0.060f,
+            outerColor = HandSilver,
+            lumeColor  = HandLume
+        )
         drawSwordHand(
             center     = center,
             length     = radius * 0.72f,
@@ -66,22 +69,17 @@ fun AviatorDial(
             lumeColor  = HandLume
         )
 
-        // Hour hand — shorter, wider sword
-        drawSwordHand(
-            center     = center,
-            length     = radius * 0.50f,
-            angleDeg   = hourAngleDeg,
-            maxWidth   = radius * 0.060f,
-            outerColor = HandSilver,
-            lumeColor  = HandLume
-        )
-
-        // Second hand — thin needle with counterweight tail
+        // Time second hand — above hour/minute
         secondAngleDeg?.let {
             drawSecondHand(center, radius * 0.84f, radius * 0.22f, it, Orange)
         }
 
-        // Hub — three concentric circles for depth
+        // Chrono sweep — on top of all hands so it's always visible
+        chronoAngleDeg?.let {
+            drawChronoSweep(center, radius * 0.62f, it, Orange, planeBitmap)
+        }
+
+        // Hub — topmost, covers all hand pivot points
         drawCircle(HandSilver,         radius * 0.040f, center)
         drawCircle(Color(0xFF1A1E28),  radius * 0.024f, center)
         drawCircle(HandSilver,         radius * 0.010f, center)

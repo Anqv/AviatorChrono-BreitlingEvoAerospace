@@ -5,7 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
-enum class ChronoPrecision { SEC, HUNDREDTHS }
+// Cycles on every upper-LCD tap: NORMAL → CHR → CHR_HUNDREDTHS → NORMAL → …
+enum class WatchMode { NORMAL, CHR, CHR_HUNDREDTHS }
 
 enum class LockPreference { AUTO, OFF }
 
@@ -26,7 +27,7 @@ class ChronoState {
         private set
     private var startedAtMs: Long = 0L
 
-    var precision by mutableStateOf(ChronoPrecision.SEC)
+    var watchMode by mutableStateOf(WatchMode.NORMAL)
         private set
 
     var lockPreference by mutableStateOf(LockPreference.AUTO)
@@ -38,32 +39,40 @@ class ChronoState {
     var parkedMode by mutableStateOf(false)
         private set
 
+    // Screen-awake lock: only in CHR (seconds) mode while running
     val isNavigationActive: Boolean
         get() = lockPreference == LockPreference.AUTO &&
                 running &&
-                precision == ChronoPrecision.SEC
-
-    val isChronoActive: Boolean
-        get() = running || elapsedMs > 0L
+                watchMode == WatchMode.CHR
 
     fun currentElapsedMs(nowMs: Long): Long =
         if (running) elapsedMs + (nowMs - startedAtMs) else elapsedMs
 
-    // 3-state cycle on every tap:  running → stopped → zero → running → …
-    fun toggleStartStop(nowMs: Long) {
-        when {
-            running      -> { elapsedMs += nowMs - startedAtMs; running = false }
-            elapsedMs > 0 -> { elapsedMs = 0L }
-            else          -> { startedAtMs = nowMs; running = true }
+    // Upper LCD tap — cycle display mode
+    fun cycleMode() {
+        watchMode = when (watchMode) {
+            WatchMode.NORMAL          -> WatchMode.CHR
+            WatchMode.CHR             -> WatchMode.CHR_HUNDREDTHS
+            WatchMode.CHR_HUNDREDTHS  -> WatchMode.NORMAL
         }
     }
 
-    fun togglePrecision() {
-        precision = if (precision == ChronoPrecision.SEC) ChronoPrecision.HUNDREDTHS else ChronoPrecision.SEC
+    // Lower LCD LEFT tap — stop if running, reset if paused with elapsed time
+    fun stopOrReset(nowMs: Long) {
+        if (running) {
+            elapsedMs += nowMs - startedAtMs
+            running = false
+        } else if (elapsedMs > 0L) {
+            elapsedMs = 0L
+        }
     }
 
-    fun toggleLockPreference() {
-        lockPreference = if (lockPreference == LockPreference.AUTO) LockPreference.OFF else LockPreference.AUTO
+    // Lower LCD RIGHT tap — start or continue
+    fun startContinue(nowMs: Long) {
+        if (!running) {
+            startedAtMs = nowMs
+            running = true
+        }
     }
 
     fun cycleLcdColor() {

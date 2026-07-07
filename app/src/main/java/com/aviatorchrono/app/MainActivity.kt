@@ -47,13 +47,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ─── Tap-zone fractions (all relative to screen width/height) ────────────────
+// ─── Tap zones (fractional screen coordinates) ────────────────────────────────
 //
-//  Upper LCD  │ x: 20.9–79.3%  y: 17.5–30.0%  │ tap → toggle precision
-//  Lower LCD  │ x: 20.9–79.3%  y: 64.9–82.5%  │ tap → cycle LCD colour
-//  Hub        │ x: 42.5–57.5%  y: 42.5–57.5%  │ tap → park / unpark hands
-//  Rest dial  │ everything else                 │ tap → chrono start/stop/reset
-//
+//  Upper LCD   x 20.9–79.3%  y 17.5–30.0%  → cycle mode NORMAL/CHR/CHR 1/100
+//  Lower LCD left half   x 20.9–50.1%  y 64.9–82.5%  → stop / reset chrono
+//  Lower LCD right half  x 50.1–79.3%  y 64.9–82.5%  → start / continue chrono
+//  Centre hub  x 42.5–57.5%  y 42.5–57.5%  → park / unpark hands
+//  Dial (rest)                                → cycle LCD colour
+
+private const val LCD_X1 = 0.2088f;  private const val LCD_X2 = 0.7928f
+private const val LCD_XM = 0.5008f   // midpoint of lower LCD
+private const val ULCD_Y1 = 0.1746f; private const val ULCD_Y2 = 0.3002f
+private const val LLCD_Y1 = 0.6493f; private const val LLCD_Y2 = 0.8254f
 
 @Composable
 fun AviatorChronoScreen(
@@ -63,10 +68,7 @@ fun AviatorChronoScreen(
     var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(Unit) {
-        while (true) {
-            nowMs = System.currentTimeMillis()
-            delay(100)
-        }
+        while (true) { nowMs = System.currentTimeMillis(); delay(100) }
     }
 
     LaunchedEffect(chrono.isNavigationActive) {
@@ -80,57 +82,54 @@ fun AviatorChronoScreen(
 
     val calendar = remember(nowMs) { Calendar.getInstance().apply { timeInMillis = nowMs } }
     val hour12 = calendar.get(Calendar.HOUR)
-    val minute = calendar.get(Calendar.MINUTE)
-    val second = calendar.get(Calendar.SECOND)
-    val millis = calendar.get(Calendar.MILLISECOND)
+    val minute  = calendar.get(Calendar.MINUTE)
+    val second  = calendar.get(Calendar.SECOND)
+    val millis  = calendar.get(Calendar.MILLISECOND)
 
     val utcCal = remember(nowMs) {
         Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = nowMs }
     }
 
-    // When parked: hour at 3 o'clock (90°), minute at 9 o'clock (270°), second hidden
-    val hourAngle    = if (chrono.parkedMode) 90f  else hour12 * 30f + minute * 0.5f
-    val minuteAngle  = if (chrono.parkedMode) 270f else minute * 6f + second * 0.1f
+    val hourAngle   = if (chrono.parkedMode) 90f  else hour12 * 30f + minute * 0.5f
+    val minuteAngle = if (chrono.parkedMode) 270f else minute * 6f + second * 0.1f
     val secondAngle: Float? = if (chrono.parkedMode) null else second * 6f + millis * 0.006f
+
     val chronoElapsed = chrono.currentElapsedMs(nowMs)
-    val chronoAngle  = ((chronoElapsed / 1000.0) % 60.0 * 6.0).toFloat()
+    val chronoAngle   = ((chronoElapsed / 1000.0) % 60.0 * 6.0).toFloat()
 
     val lcdOn  = chrono.lcdColor.onColor
     val lcdOff = chrono.lcdColor.offColor
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(DialBackground)) {
-        val swDp = maxWidth
-        val shDp = maxHeight
+        val swDp = maxWidth;  val shDp = maxHeight
         val density = LocalDensity.current
         val swPx = with(density) { swDp.toPx() }
         val shPx = with(density) { shDp.toPx() }
 
-        // ── Single tap dispatcher (lowest Z — no visual content) ──────────────
-        // All other layers carry NO clickable/pointerInput, so all taps fall here.
-        // We dispatch by fractional coordinate so zones never overlap or conflict.
+        // ── Single tap dispatcher ─────────────────────────────────────────────
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(swPx, shPx) {
-                    detectTapGestures { offset ->
-                        val fx = offset.x / swPx
-                        val fy = offset.y / shPx
-                        when {
-                            // Centre hub → park / unpark
-                            fx in 0.425f..0.575f && fy in 0.425f..0.575f ->
-                                chrono.toggleParkedMode()
-                            // Upper LCD → toggle SEC / 1/100 precision
-                            fx in 0.2088f..0.7928f && fy in 0.1746f..0.3002f ->
-                                chrono.togglePrecision()
-                            // Lower LCD → cycle LCD colour
-                            fx in 0.2088f..0.7928f && fy in 0.6493f..0.8254f ->
-                                chrono.cycleLcdColor()
-                            // Rest of dial → chrono start / stop / reset
-                            else ->
-                                chrono.toggleStartStop(System.currentTimeMillis())
-                        }
+            modifier = Modifier.fillMaxSize().pointerInput(swPx, shPx) {
+                detectTapGestures { offset ->
+                    val fx = offset.x / swPx
+                    val fy = offset.y / shPx
+                    when {
+                        // Upper LCD → cycle mode
+                        fx in LCD_X1..LCD_X2 && fy in ULCD_Y1..ULCD_Y2 ->
+                            chrono.cycleMode()
+                        // Lower LCD left → stop / reset
+                        fx in LCD_X1..LCD_XM && fy in LLCD_Y1..LLCD_Y2 ->
+                            chrono.stopOrReset(System.currentTimeMillis())
+                        // Lower LCD right → start / continue
+                        fx in LCD_XM..LCD_X2 && fy in LLCD_Y1..LLCD_Y2 ->
+                            chrono.startContinue(System.currentTimeMillis())
+                        // Centre hub → park / unpark
+                        fx in 0.425f..0.575f && fy in 0.425f..0.575f ->
+                            chrono.toggleParkedMode()
+                        // Rest of dial → cycle LCD colour
+                        else -> chrono.cycleLcdColor()
                     }
                 }
+            }
         )
 
         // ── Layer 1 – PNG background ──────────────────────────────────────────
@@ -138,121 +137,130 @@ fun AviatorChronoScreen(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawBitmap(
-                        bgBitmap,
-                        null,
-                        RectF(0f, 0f, size.width, size.height),
-                        null
+                        bgBitmap, null,
+                        RectF(0f, 0f, size.width, size.height), null
                     )
                 }
             }
         }
 
         // ── Layer 2 – Upper LCD ───────────────────────────────────────────────
-        // slot y=107-184 → frac 0.1746-0.3002, x=128-486 → frac 0.2088-0.7928
         Box(
             modifier = Modifier
-                .absoluteOffset(x = swDp * 0.2088f, y = shDp * 0.1746f)
-                .width(swDp * 0.5840f)
-                .height(shDp * 0.1256f)
+                .absoluteOffset(x = swDp * LCD_X1, y = shDp * ULCD_Y1)
+                .width(swDp * (LCD_X2 - LCD_X1))
+                .height(shDp * (ULCD_Y2 - ULCD_Y1))
                 .background(LcdBackground)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val panelW = size.width
-                val panelH = size.height
-                val vPad = panelH * 0.07f
-                val hPad = panelW * 0.03f
-                val innerH = panelH - vPad * 2f
-                val innerW = panelW - hPad * 2f
+                val panelW = size.width;  val panelH = size.height
+                val vPad = panelH * 0.07f;  val hPad = panelW * 0.03f
+                val innerH = panelH - vPad * 2f;  val innerW = panelW - hPad * 2f
 
-                if (chrono.isChronoActive) {
-                    // CHR or CHR 1-100
-                    val modeText = if (chrono.precision == ChronoPrecision.HUNDREDTHS) "CHR 1-100" else "CHR"
-                    val (dw, dh) = sevenSegFitSize(modeText, innerW, innerH)
-                    val totalW = measureSevenSegWidth(modeText, dw)
-                    val sx = hPad + (innerW - totalW) / 2f
-                    val sy = vPad + (innerH - dh) / 2f
-                    drawSevenSegText(modeText, Offset(sx, sy), dw, dh, lcdOn, lcdOff)
-                } else {
-                    // Date: "MON  07  JUL" mixing native text + 7-seg digits
-                    val dayAbbr   = dayAbbrev(calendar)
-                    val monthAbbr = monthAbbrev(calendar)
-                    val dayNum    = "%02d".format(calendar.get(Calendar.DAY_OF_MONTH))
+                when (chrono.watchMode) {
+                    WatchMode.NORMAL -> {
+                        // Date: "MON  07  JUL"
+                        val dayAbbr   = dayAbbrev(calendar)
+                        val monthAbbr = monthAbbrev(calendar)
+                        val dayNum    = "%02d".format(calendar.get(Calendar.DAY_OF_MONTH))
 
-                    val (dw, dh) = sevenSegFitSize(dayNum, innerW * 0.30f, innerH)
-                    val segW = measureSevenSegWidth(dayNum, dw)
+                        val (dw, dh) = sevenSegFitSize(dayNum, innerW * 0.30f, innerH)
+                        val segW = measureSevenSegWidth(dayNum, dw)
+                        val textPaint = Paint().apply {
+                            isAntiAlias = true
+                            color = lcdOn.toArgb()
+                            typeface = android.graphics.Typeface.MONOSPACE
+                            textSize = dh * 0.52f
+                            textAlign = Paint.Align.LEFT
+                        }
+                        val textW   = textPaint.measureText("MON")
+                        val spacing = dw * 0.5f
+                        val rowW    = textW + spacing + segW + spacing + textW
 
-                    val textPaint = Paint().apply {
-                        isAntiAlias = true
-                        color = lcdOn.toArgb()
-                        typeface = android.graphics.Typeface.MONOSPACE
-                        textSize = dh * 0.52f
-                        textAlign = Paint.Align.LEFT
+                        var cx    = hPad + (innerW - rowW) / 2f
+                        val segY  = vPad + (innerH - dh) / 2f
+                        val textY = segY + dh * 0.72f
+
+                        drawIntoCanvas { c -> c.nativeCanvas.drawText(dayAbbr, cx, textY, textPaint) }
+                        cx += textW + spacing
+                        drawSevenSegText(dayNum, Offset(cx, segY), dw, dh, lcdOn, lcdOff)
+                        cx += segW + spacing
+                        drawIntoCanvas { c -> c.nativeCanvas.drawText(monthAbbr, cx, textY, textPaint) }
                     }
-                    val textW = textPaint.measureText("MON")
-                    val spacing = dw * 0.5f
-                    val rowW = textW + spacing + segW + spacing + textW
-
-                    var cx = hPad + (innerW - rowW) / 2f
-                    val segY  = vPad + (innerH - dh) / 2f
-                    val textY = segY + dh * 0.72f
-
-                    drawIntoCanvas { c ->
-                        c.nativeCanvas.drawText(dayAbbr, cx, textY, textPaint)
+                    WatchMode.CHR -> {
+                        val (dw, dh) = sevenSegFitSize("CHR", innerW, innerH)
+                        val tw = measureSevenSegWidth("CHR", dw)
+                        drawSevenSegText("CHR", Offset(hPad + (innerW - tw) / 2f, vPad + (innerH - dh) / 2f), dw, dh, lcdOn, lcdOff)
                     }
-                    cx += textW + spacing
-                    drawSevenSegText(dayNum, Offset(cx, segY), dw, dh, lcdOn, lcdOff)
-                    cx += segW + spacing
-                    drawIntoCanvas { c ->
-                        c.nativeCanvas.drawText(monthAbbr, cx, textY, textPaint)
+                    WatchMode.CHR_HUNDREDTHS -> {
+                        val label = "CHR 1-100"
+                        val (dw, dh) = sevenSegFitSize(label, innerW, innerH)
+                        val tw = measureSevenSegWidth(label, dw)
+                        drawSevenSegText(label, Offset(hPad + (innerW - tw) / 2f, vPad + (innerH - dh) / 2f), dw, dh, lcdOn, lcdOff)
                     }
                 }
             }
         }
 
         // ── Layer 3 – Lower LCD ───────────────────────────────────────────────
-        // slot y=398-506 → frac 0.6493-0.8254, x=128-486 → frac 0.2088-0.7928
         Box(
             modifier = Modifier
-                .absoluteOffset(x = swDp * 0.2088f, y = shDp * 0.6493f)
-                .width(swDp * 0.5840f)
-                .height(shDp * 0.1761f)
+                .absoluteOffset(x = swDp * LCD_X1, y = shDp * LLCD_Y1)
+                .width(swDp * (LCD_X2 - LCD_X1))
+                .height(shDp * (LLCD_Y2 - LLCD_Y1))
                 .background(LcdBackground)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val panelW = size.width
-                val panelH = size.height
-                val vPad = panelH * 0.08f
-                val hPad = panelW * 0.04f
-                val innerH = panelH - vPad * 2f
-                val innerW = panelW - hPad * 2f
+                val panelW = size.width;  val panelH = size.height
+                val vPad = panelH * 0.08f;  val hPad = panelW * 0.04f
+                val innerH = panelH - vPad * 2f;  val innerW = panelW - hPad * 2f
 
-                val displayText = if (chrono.isChronoActive) {
-                    formatChrono(chronoElapsed, chrono.precision)
-                } else {
-                    "%02d:%02d:%02d".format(
-                        utcCal.get(Calendar.HOUR_OF_DAY),
-                        utcCal.get(Calendar.MINUTE),
-                        utcCal.get(Calendar.SECOND)
-                    )
+                val displayText = when (chrono.watchMode) {
+                    WatchMode.NORMAL ->
+                        "%02d:%02d:%02d".format(
+                            utcCal.get(Calendar.HOUR_OF_DAY),
+                            utcCal.get(Calendar.MINUTE),
+                            utcCal.get(Calendar.SECOND)
+                        )
+                    WatchMode.CHR ->
+                        formatChrono(chronoElapsed, hundredths = false)
+                    WatchMode.CHR_HUNDREDTHS ->
+                        formatChrono(chronoElapsed, hundredths = true)
                 }
 
                 val (dw, dh) = sevenSegFitSize(displayText, innerW, innerH)
-                val totalW = measureSevenSegWidth(displayText, dw)
-                val sx = hPad + (innerW - totalW) / 2f
-                val sy = vPad + (innerH - dh) / 2f
-                drawSevenSegText(displayText, Offset(sx, sy), dw, dh, lcdOn, lcdOff)
+                val totalW   = measureSevenSegWidth(displayText, dw)
+                drawSevenSegText(
+                    displayText,
+                    Offset(hPad + (innerW - totalW) / 2f, vPad + (innerH - dh) / 2f),
+                    dw, dh, lcdOn, lcdOff
+                )
 
-                val labelText = if (chrono.isChronoActive) "CHR" else "UTC"
+                // Dim context label bottom-right
+                val label = when (chrono.watchMode) {
+                    WatchMode.NORMAL -> "UTC"
+                    WatchMode.CHR    -> "CHR"
+                    WatchMode.CHR_HUNDREDTHS -> "1/100"
+                }
                 val dimPaint = Paint().apply {
                     isAntiAlias = true
                     color = lcdOff.copy(alpha = 0.7f).toArgb()
                     typeface = android.graphics.Typeface.MONOSPACE
-                    textSize = panelH * 0.18f
+                    textSize  = panelH * 0.18f
                     textAlign = Paint.Align.RIGHT
                 }
                 drawIntoCanvas { c ->
-                    c.nativeCanvas.drawText(labelText, panelW - hPad, panelH - vPad * 0.4f, dimPaint)
+                    c.nativeCanvas.drawText(label, panelW - hPad, panelH - vPad * 0.4f, dimPaint)
                 }
+
+                // Divider line splitting STOP|RESET (left) and START (right) halves
+                val midX = panelW / 2f
+                drawLine(
+                    color = lcdOff,
+                    start = Offset(midX, vPad * 1.5f),
+                    end   = Offset(midX, panelH - vPad * 1.5f),
+                    strokeWidth = 1.5f
+                )
             }
         }
 
@@ -267,16 +275,14 @@ fun AviatorChronoScreen(
     }
 }
 
-private fun formatChrono(elapsedMs: Long, precision: ChronoPrecision): String {
+private fun formatChrono(elapsedMs: Long, hundredths: Boolean): String {
     val totalSec = elapsedMs / 1000
     val hh = totalSec / 3600
     val mm = (totalSec / 60) % 60
     val ss = totalSec % 60
     val cs = (elapsedMs / 10) % 100
-    return if (precision == ChronoPrecision.HUNDREDTHS)
-        "%02d:%02d.%02d".format(mm, ss, cs)
-    else
-        "%02d:%02d:%02d".format(hh, mm, ss)
+    return if (hundredths) "%02d:%02d.%02d".format(mm, ss, cs)
+    else                   "%02d:%02d:%02d".format(hh, mm, ss)
 }
 
 private fun dayAbbrev(cal: Calendar): String =

@@ -1,13 +1,20 @@
 package com.aviatorchrono.app
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -20,8 +27,8 @@ val MinorTick      = Color(0xFF4A5A70)
 val Teal           = Color(0xFF4A9B94)
 
 // Hand colours
-private val HandSilver = Color(0xFF7A8898)   // outer sword body
-private val HandLume   = Color(0xFFE8E4D0)   // inner lume stripe
+private val HandSilver = Color(0xFF7A8898)
+private val HandLume   = Color(0xFFE8E4D0)
 
 // LCD panel tokens (referenced from MainActivity)
 val LcdBackground  = Color(0xFF050D05)
@@ -36,13 +43,18 @@ fun AviatorDial(
     chronoAngleDeg: Float?,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val planeBitmap: ImageBitmap = remember {
+        BitmapFactory.decodeResource(context.resources, R.drawable.jas_plane).asImageBitmap()
+    }
+
     Canvas(modifier = modifier) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val radius = size.minDimension / 2f - 4f
 
-        // Chrono sweep with airplane tip — drawn under main hands
+        // Chrono sweep with JAS airplane tip — drawn under main hands
         chronoAngleDeg?.let {
-            drawChronoSweep(center, radius * 0.62f, it, Orange.copy(alpha = 0.9f))
+            drawChronoSweep(center, radius * 0.62f, it, Orange.copy(alpha = 0.9f), planeBitmap)
         }
 
         // Minute hand — longer, slightly narrower sword
@@ -79,13 +91,12 @@ fun AviatorDial(
 
 // ─── Coordinate helper ───────────────────────────────────────────────────────
 //
-// All hand-drawing functions use the same angle convention as the original:
-//   rad = toRadians(angleDeg - 90)
-// so 0° = 12 o'clock, 90° = 3 o'clock, etc.
+// All hand-drawing functions use:
+//   rad = toRadians(angleDeg - 90)   →  0° = 12 o'clock, 90° = 3 o'clock
 //
-// pt(along, perp) converts a hand-local coordinate to a screen Offset:
-//   along  – distance from pivot toward the tip (positive)
-//   perp   – lateral offset, positive = to the RIGHT when facing the tip
+// pt(along, perp):
+//   along – distance from pivot toward tip (positive)
+//   perp  – lateral offset; positive = RIGHT when facing the tip
 //
 private fun handPt(center: Offset, cosA: Float, sinA: Float, along: Float, perp: Float) =
     Offset(
@@ -94,15 +105,6 @@ private fun handPt(center: Offset, cosA: Float, sinA: Float, along: Float, perp:
     )
 
 // ─── Sword / Breitling hand ──────────────────────────────────────────────────
-//
-// Shape (pivot at 0, tip at `length`):
-//   • narrow base (28% of maxWidth)
-//   • widens to maxWidth over the first 15% of length
-//   • parallel section from 15% to 70%
-//   • tapers to a sharp point at the tip
-//
-// Cream lume stripe runs down the centre at 38% of maxWidth.
-//
 private fun DrawScope.drawSwordHand(
     center: Offset,
     length: Float,
@@ -116,24 +118,22 @@ private fun DrawScope.drawSwordHand(
     val sinA = sin(rad).toFloat()
     fun pt(along: Float, perp: Float) = handPt(center, cosA, sinA, along, perp)
 
-    val bw = maxWidth * 0.28f   // base half-width (at pivot)
-    val ws = length * 0.15f     // along-position where full width is reached
-    val ts = length * 0.70f     // along-position where taper to tip begins
+    val bw = maxWidth * 0.28f
+    val ws = length * 0.15f
+    val ts = length * 0.70f
 
-    // Outer sword body — start at left base, trace outline, close across base
     val outer = Path().apply {
-        pt(0f, -bw / 2f).let         { moveTo(it.x, it.y) }  // base left
-        pt(ws, -maxWidth / 2f).let   { lineTo(it.x, it.y) }  // wide left
-        pt(ts, -maxWidth / 2f).let   { lineTo(it.x, it.y) }  // taper left
-        pt(length, 0f).let           { lineTo(it.x, it.y) }  // tip
-        pt(ts, maxWidth / 2f).let    { lineTo(it.x, it.y) }  // taper right
-        pt(ws, maxWidth / 2f).let    { lineTo(it.x, it.y) }  // wide right
-        pt(0f, bw / 2f).let          { lineTo(it.x, it.y) }  // base right
-        close()                                                // flat base edge
+        pt(0f, -bw / 2f).let         { moveTo(it.x, it.y) }
+        pt(ws, -maxWidth / 2f).let   { lineTo(it.x, it.y) }
+        pt(ts, -maxWidth / 2f).let   { lineTo(it.x, it.y) }
+        pt(length, 0f).let           { lineTo(it.x, it.y) }
+        pt(ts, maxWidth / 2f).let    { lineTo(it.x, it.y) }
+        pt(ws, maxWidth / 2f).let    { lineTo(it.x, it.y) }
+        pt(0f, bw / 2f).let          { lineTo(it.x, it.y) }
+        close()
     }
     drawPath(outer, outerColor)
 
-    // Lume stripe — same sword shape, 38% of maxWidth, stops at 92% of length
     if (lumeColor != null) {
         val lw  = maxWidth * 0.38f
         val lbw = bw * 0.50f
@@ -164,66 +164,51 @@ private fun DrawScope.drawSecondHand(
     val sinA = sin(rad).toFloat()
     fun pt(along: Float) = handPt(center, cosA, sinA, along, 0f)
 
-    drawLine(color, center, pt(-tailLength), 4f,   StrokeCap.Round)  // counterweight
-    drawLine(color, center, pt(length),      2.2f, StrokeCap.Round)  // needle
-    drawCircle(color, 4f, center)                                     // pivot dot
+    drawLine(color, center, pt(-tailLength), 4f,   StrokeCap.Round)
+    drawLine(color, center, pt(length),      2.2f, StrokeCap.Round)
+    drawCircle(color, 4f, center)
 }
 
-// ─── Chrono sweep with airplane at tip ───────────────────────────────────────
+// ─── Chrono sweep with JAS airplane bitmap at tip ────────────────────────────
+//
+// jas_plane.png has its nose at the top (row 0). To orient nose in the sweep
+// direction we rotate by -angleDeg (CCW by angleDeg degrees):
+//   bitmap body (+Y) must map to (-cosA, -sinA) — toward center.
+//   Solving CW rotation θ: sinθ = -cosA, cosθ = -sinA  →  θ = -angleDeg.
+//
+// withTransform sequence (each op post-concatenated to CTM, so rightmost applied first):
+//   1. translate(tip)           — origin at tip in screen coords
+//   2. rotate(-angleDeg, 0,0)  — rotate around tip
+//   3. translate(-scaledW/2,0) — shift so top-center of bitmap lands at origin
+// Drawing at (0,0) with dstSize then places the bitmap correctly.
+//
 private fun DrawScope.drawChronoSweep(
     center: Offset,
     length: Float,
     angleDeg: Float,
-    color: Color
+    color: Color,
+    planeBitmap: ImageBitmap
 ) {
     val rad  = Math.toRadians((angleDeg - 90.0))
     val cosA = cos(rad).toFloat()
     val sinA = sin(rad).toFloat()
     fun pt(along: Float, perp: Float = 0f) = handPt(center, cosA, sinA, along, perp)
 
-    val ps      = length * 0.11f        // airplane scale unit
-    val lineEnd = length - ps * 2.0f    // line stops before the airplane body
+    val scaledH  = length * 0.38f
+    val scaledW  = scaledH * (planeBitmap.width.toFloat() / planeBitmap.height.toFloat())
+    val lineEnd  = length - scaledH
 
-    // Thin stem
     drawLine(color, center, pt(lineEnd), 2f, StrokeCap.Round)
 
-    // ── Top-down airplane silhouette ──────────────────────────────────────
-    // Coordinates in (along, perp): nose at `length`, tail toward pivot.
-    val noseY    = length
-    val fLen     = ps * 1.8f
-    val fW       = ps * 0.30f           // fuselage half-width
-    val wingFront = noseY - fLen * 0.30f
-    val wingBack  = noseY - fLen * 0.62f
-    val span      = ps * 1.20f          // half-wingspan
-    val tailY     = noseY - fLen
-
-    // Fuselage
-    val fuselage = Path().apply {
-        pt(noseY, 0f).let                          { moveTo(it.x, it.y) }  // nose
-        pt(wingFront, -fW).let                     { lineTo(it.x, it.y) }  // left shoulder
-        pt(tailY + ps * 0.18f, -fW * 0.50f).let  { lineTo(it.x, it.y) }  // left tail root
-        pt(tailY, 0f).let                          { lineTo(it.x, it.y) }  // tail tip
-        pt(tailY + ps * 0.18f,  fW * 0.50f).let  { lineTo(it.x, it.y) }  // right tail root
-        pt(wingFront,  fW).let                     { lineTo(it.x, it.y) }  // right shoulder
-        close()
+    val tip = pt(length, 0f)
+    withTransform({
+        translate(tip.x, tip.y)
+        rotate(-angleDeg, pivot = Offset.Zero)
+        translate(-scaledW / 2f, 0f)
+    }) {
+        drawImage(
+            image   = planeBitmap,
+            dstSize = IntSize(scaledW.toInt(), scaledH.toInt())
+        )
     }
-    drawPath(fuselage, color)
-
-    // Left wing
-    val lWing = Path().apply {
-        pt(wingFront, -fW).let   { moveTo(it.x, it.y) }   // root leading
-        pt(wingBack, -span).let  { lineTo(it.x, it.y) }   // wingtip
-        pt(wingBack, -fW).let    { lineTo(it.x, it.y) }   // root trailing
-        close()
-    }
-    drawPath(lWing, color)
-
-    // Right wing
-    val rWing = Path().apply {
-        pt(wingFront, fW).let   { moveTo(it.x, it.y) }
-        pt(wingBack, span).let  { lineTo(it.x, it.y) }
-        pt(wingBack, fW).let    { lineTo(it.x, it.y) }
-        close()
-    }
-    drawPath(rWing, color)
 }

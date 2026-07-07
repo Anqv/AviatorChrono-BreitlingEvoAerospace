@@ -270,6 +270,7 @@ fun AviatorChronoScreen(
             minuteAngleDeg = minuteAngle,
             secondAngleDeg = secondAngle,
             chronoAngleDeg = chronoAngle,
+            chronoAlpha    = if (chrono.watchMode == WatchMode.NORMAL) 0.25f else 1f,
             modifier       = Modifier.fillMaxSize()
         )
     }

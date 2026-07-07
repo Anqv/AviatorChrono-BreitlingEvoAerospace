@@ -40,6 +40,7 @@ fun AviatorDial(
     minuteAngleDeg: Float,
     secondAngleDeg: Float?,
     chronoAngleDeg: Float?,
+    chronoAlpha: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -74,9 +75,9 @@ fun AviatorDial(
             drawSecondHand(center, radius * 0.84f, radius * 0.22f, it, Orange)
         }
 
-        // Chrono sweep — on top of all hands so it's always visible
+        // Chrono sweep — on top of all hands; semi-transparent when not in chrono mode
         chronoAngleDeg?.let {
-            drawChronoSweep(center, radius * 0.62f, it, Orange, planeBitmap)
+            drawChronoSweep(center, radius * 0.62f, it, Orange.copy(alpha = chronoAlpha), planeBitmap)
         }
 
         // Hub — topmost, covers all hand pivot points

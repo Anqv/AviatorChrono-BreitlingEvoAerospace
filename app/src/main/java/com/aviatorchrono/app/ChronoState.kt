@@ -39,6 +39,12 @@ class ChronoState {
     var parkedMode by mutableStateOf(false)
         private set
 
+    // Split/lap: display frozen at lapElapsedMs while chrono keeps counting
+    var lapMode by mutableStateOf(false)
+        private set
+    var lapElapsedMs by mutableStateOf(0L)
+        private set
+
     // Screen-awake lock: only in CHR (seconds) mode while running
     val isNavigationActive: Boolean
         get() = lockPreference == LockPreference.AUTO &&
@@ -62,16 +68,22 @@ class ChronoState {
         if (running) {
             elapsedMs += nowMs - startedAtMs
             running = false
+            lapMode = false
         } else if (elapsedMs > 0L) {
             elapsedMs = 0L
+            lapMode = false
         }
     }
 
-    // Lower LCD RIGHT tap — start or continue
+    // Lower LCD RIGHT tap:
+    //   not running          → start
+    //   running, no lap      → freeze display (lap/split)
+    //   running, lap active  → unfreeze, show live time again
     fun startContinue(nowMs: Long) {
-        if (!running) {
-            startedAtMs = nowMs
-            running = true
+        when {
+            !running  -> { startedAtMs = nowMs; running = true; lapMode = false }
+            lapMode   -> { lapMode = false }
+            else      -> { lapElapsedMs = currentElapsedMs(nowMs); lapMode = true }
         }
     }
 

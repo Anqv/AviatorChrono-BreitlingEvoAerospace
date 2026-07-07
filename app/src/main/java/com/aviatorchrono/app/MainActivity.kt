@@ -215,6 +215,8 @@ fun AviatorChronoScreen(
                 val vPad = panelH * 0.08f;  val hPad = panelW * 0.04f
                 val innerH = panelH - vPad * 2f;  val innerW = panelW - hPad * 2f
 
+                // In lap mode the display freezes at the lap snapshot
+                val shownElapsed = if (chrono.lapMode) chrono.lapElapsedMs else chronoElapsed
                 val displayText = when (chrono.watchMode) {
                     WatchMode.NORMAL ->
                         "%02d:%02d:%02d".format(
@@ -223,9 +225,9 @@ fun AviatorChronoScreen(
                             utcCal.get(Calendar.SECOND)
                         )
                     WatchMode.CHR ->
-                        formatChrono(chronoElapsed, hundredths = false)
+                        formatChrono(shownElapsed, hundredths = false)
                     WatchMode.CHR_HUNDREDTHS ->
-                        formatChrono(chronoElapsed, hundredths = true)
+                        formatChrono(shownElapsed, hundredths = true)
                 }
 
                 val (dw, dh) = sevenSegFitSize(displayText, innerW, innerH)
@@ -236,11 +238,12 @@ fun AviatorChronoScreen(
                     dw, dh, lcdOn, lcdOff
                 )
 
-                // Dim context label bottom-right
-                val label = when (chrono.watchMode) {
-                    WatchMode.NORMAL -> "UTC"
-                    WatchMode.CHR    -> "CHR"
-                    WatchMode.CHR_HUNDREDTHS -> "1/100"
+                // Dim context label bottom-right; "LAP" overrides when split is frozen
+                val label = when {
+                    chrono.lapMode -> "LAP"
+                    chrono.watchMode == WatchMode.NORMAL -> "UTC"
+                    chrono.watchMode == WatchMode.CHR    -> "CHR"
+                    else -> "1/100"
                 }
                 val dimPaint = Paint().apply {
                     isAntiAlias = true

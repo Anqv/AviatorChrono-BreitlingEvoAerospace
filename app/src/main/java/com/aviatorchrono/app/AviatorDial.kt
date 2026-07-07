@@ -21,7 +21,7 @@ import kotlin.math.sin
 val DialBackground = Color(0xFF0A1433)
 val DialOutline    = Color(0xFF2A4070)
 val Cream          = Color(0xFFD0D8E4)
-val Orange         = Color(0xFFFF6B1A)
+val Orange         = Color(0xFFDC0A1E)   // aviation red — both second hands
 val MinorTick      = Color(0xFF4A5A70)
 val Teal           = Color(0xFF4A9B94)
 

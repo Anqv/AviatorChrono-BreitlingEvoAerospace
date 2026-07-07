@@ -1,20 +1,19 @@
 package com.aviatorchrono.app
 
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntSize
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -44,8 +43,8 @@ fun AviatorDial(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val planeBitmap: ImageBitmap = remember {
-        BitmapFactory.decodeResource(context.resources, R.drawable.jas_plane).asImageBitmap()
+    val planeBitmap = remember {
+        BitmapFactory.decodeResource(context.resources, R.drawable.jas_plane)
     }
 
     Canvas(modifier = modifier) {
@@ -171,44 +170,46 @@ private fun DrawScope.drawSecondHand(
 
 // ─── Chrono sweep with JAS airplane bitmap at tip ────────────────────────────
 //
-// jas_plane.png has its nose at the top (row 0). To orient nose in the sweep
-// direction we rotate by -angleDeg (CCW by angleDeg degrees):
-//   bitmap body (+Y) must map to (-cosA, -sinA) — toward center.
-//   Solving CW rotation θ: sinθ = -cosA, cosθ = -sinA  →  θ = -angleDeg.
+// jas_plane.png has nose at the top (row 0) of the image.
 //
-// withTransform sequence (each op post-concatenated to CTM, so rightmost applied first):
-//   1. translate(tip)           — origin at tip in screen coords
-//   2. rotate(-angleDeg, 0,0)  — rotate around tip
-//   3. translate(-scaledW/2,0) — shift so top-center of bitmap lands at origin
-// Drawing at (0,0) with dstSize then places the bitmap correctly.
+// Matrix operations (each postXxx is appended, so they're applied to points
+// in REVERSE order — last op runs first on any given bitmap pixel):
+//   1. postScale(scale)           — resize bitmap
+//   2. postTranslate(-w/2, 0)     — put nose centre at local origin
+//   3. postRotate(+angleDeg)      — CW rotation so nose points away from centre
+//   4. postTranslate(tip.x, tip.y)— move origin to sweep-arm tip on screen
+//
+// Why +angleDeg (CW): Android canvas uses Y-down. CW rotation by θ transforms
+// (x,y) → (x·cosθ − y·sinθ,  x·sinθ + y·cosθ). For the tail vector (0, h)
+// this gives (−h·sinθ, h·cosθ), which points toward the dial centre at every
+// clock position — exactly what we need.
 //
 private fun DrawScope.drawChronoSweep(
     center: Offset,
     length: Float,
     angleDeg: Float,
     color: Color,
-    planeBitmap: ImageBitmap
+    planeBitmap: android.graphics.Bitmap
 ) {
     val rad  = Math.toRadians((angleDeg - 90.0))
     val cosA = cos(rad).toFloat()
     val sinA = sin(rad).toFloat()
     fun pt(along: Float, perp: Float = 0f) = handPt(center, cosA, sinA, along, perp)
 
-    val scaledH  = length * 0.38f
-    val scaledW  = scaledH * (planeBitmap.width.toFloat() / planeBitmap.height.toFloat())
-    val lineEnd  = length - scaledH
+    val scaledH = length * 0.38f
+    val scale   = scaledH / planeBitmap.height.toFloat()
+    val scaledW = planeBitmap.width * scale
+    val lineEnd = length - scaledH
 
     drawLine(color, center, pt(lineEnd), 2f, StrokeCap.Round)
 
     val tip = pt(length, 0f)
-    withTransform({
-        translate(tip.x, tip.y)
-        rotate(-angleDeg, pivot = Offset.Zero)
-        translate(-scaledW / 2f, 0f)
-    }) {
-        drawImage(
-            image   = planeBitmap,
-            dstSize = IntSize(scaledW.toInt(), scaledH.toInt())
-        )
+    val matrix = Matrix().apply {
+        postScale(scale, scale)
+        postTranslate(-scaledW / 2f, 0f)
+        postRotate(angleDeg)
+        postTranslate(tip.x, tip.y)
     }
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    drawIntoCanvas { it.nativeCanvas.drawBitmap(planeBitmap, matrix, paint) }
 }

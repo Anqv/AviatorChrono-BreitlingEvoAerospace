@@ -78,9 +78,10 @@ fun AviatorChronoScreen(
         Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = nowMs }
     }
 
-    val hourAngle    = hour12 * 30f + minute * 0.5f
-    val minuteAngle  = minute * 6f + second * 0.1f
-    val secondAngle  = second * 6f + millis * 0.006f
+    // When parked: hour at 3 o'clock (90°), minute at 9 o'clock (270°), second hidden
+    val hourAngle    = if (chrono.parkedMode) 90f  else hour12 * 30f + minute * 0.5f
+    val minuteAngle  = if (chrono.parkedMode) 270f else minute * 6f + second * 0.1f
+    val secondAngle  = if (chrono.parkedMode) null else second * 6f + millis * 0.006f
     val chronoElapsed = chrono.currentElapsedMs(nowMs)
     val chronoAngle  = ((chronoElapsed / 1000.0) % 60.0 * 6.0).toFloat()
 
@@ -229,6 +230,15 @@ fun AviatorChronoScreen(
             secondAngleDeg = secondAngle,
             chronoAngleDeg = chronoAngle,
             modifier       = Modifier.fillMaxSize()
+        )
+
+        // Layer 6 – Centre hub tap zone: toggles parked mode (hands 9/3, second hidden)
+        Box(
+            modifier = Modifier
+                .absoluteOffset(x = sw * 0.425f, y = sh * 0.425f)
+                .width(sw * 0.15f)
+                .height(sh * 0.15f)
+                .clickable { chrono.toggleParkedMode() }
         )
     }
 }

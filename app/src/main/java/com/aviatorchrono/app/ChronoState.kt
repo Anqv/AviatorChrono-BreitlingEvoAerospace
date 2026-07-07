@@ -35,6 +35,9 @@ class ChronoState {
     var lcdColor by mutableStateOf(LcdColor.AMBER)
         private set
 
+    var parkedMode by mutableStateOf(false)
+        private set
+
     private var lastStopAtMs: Long = 0L
 
     val isNavigationActive: Boolean
@@ -74,5 +77,9 @@ class ChronoState {
 
     fun cycleLcdColor() {
         lcdColor = lcdColor.next()
+    }
+
+    fun toggleParkedMode() {
+        parkedMode = !parkedMode
     }
 }

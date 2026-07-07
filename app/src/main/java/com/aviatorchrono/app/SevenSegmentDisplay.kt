@@ -19,6 +19,12 @@ private val DIGIT_SEGMENTS = mapOf(
     '9' to 0b1111011,
     '-' to 0b0000001,
     ' ' to 0b0000000,
+    // Letters used for mode labels
+    'C' to 0b1001110,   // a d e f  — top, bottom, bottom-left, top-left
+    'H' to 0b0110111,   // b c e f g — all verticals + middle
+    'R' to 0b1100111,   // a b e f g — looks like P with bottom-left leg
+    'h' to 0b0010111,   // c e f g  — lowercase h shape
+    'r' to 0b0000101,   // e g      — minimal lowercase r
 )
 
 // Gap between digit cells as a fraction of digitWidth.

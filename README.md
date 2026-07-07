@@ -13,44 +13,48 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 ## Features
 
 - **Breitling EVO Aerospace dial** — authentic PNG background with bezel, Arabic numerals, and wing badge
-- **Analog hands** — hour, minute, and orange second/chrono-sweep hands drawn over the dial
-- **Upper LCD panel** — shows date (`MON 07 JUL`) at rest; switches to `CHR` or `CHR 1/100` mode label when the chronograph is active
-- **Lower LCD panel** — shows UTC time (`HH:MM:SS`) at rest; switches to chronograph readout when timing
-- **Two chrono precision modes**
-  - `SEC` — `HH:MM:SS` (default, ideal for navigation timing)
-  - `1/100` — `MM:SS.cc` (hundredths of a second)
-- **Five LCD colours** — tap the lower panel to cycle: Amber → Green → Red → Blue → Yellow
-- **Screen-awake lock** — holds the display on automatically while the chronograph is running in SEC mode (same `FLAG_KEEP_SCREEN_ON` mechanism used by workout apps)
-- **No phone required** — standalone app, installs directly on the watch
+- **Analog hands** — sword-style hour/minute (silver-white lume), aviation-red second hand, and a chrono sweep hand with a JAS aircraft bitmap at the tip
+- **Chrono sweep animation** — when the chrono resets or switches to NORMAL mode, the sweep hand animates counter-clockwise back to 12 at 90°/s
+- **Upper LCD panel** — shows date (`MON 07 JUL`) in NORMAL mode; switches to `CHR` or `CHR 1-100` label when the chronograph is active
+- **Lower LCD panel** — shows UTC time (`HH:MM:SS`) in NORMAL mode; switches to chronograph readout when timing; a vertical divider marks the STOP|RESET / START zone boundary
+- **Lap / split timer** — freeze the lower LCD at a split time while the chrono keeps running in the background; tap again to resume the live display
+- **Three display modes** — cycled by tapping the upper LCD: `NORMAL` → `CHR` → `CHR 1/100` → `NORMAL`
+- **Five LCD colours** — tap anywhere on the dial (outside the LCD panels and hub) to cycle: Amber → Green → Red → Blue → Yellow
+- **Hand parking** — tap the centre hub to park the hour hand at 3, minute hand at 9, and hide the second hand; tap again to unpark
+- **Screen-awake lock** — holds the display on automatically while the chronograph is running in CHR (seconds) mode
 
 ---
 
 ## Usage
 
-| Gesture | Action |
-|---|---|
-| Tap the dial | Start / stop the chronograph |
-| Double-tap the dial while stopped | Reset to `00:00:00` |
-| Tap the **upper LCD** | Toggle precision: `SEC` ↔ `1/100` |
-| Tap the **lower LCD** | Cycle LCD colour (Amber → Green → Red → Blue → Yellow) |
+### Tap zones
 
-### Display logic
+| Zone | Action |
+|---|---|
+| **Upper LCD** | Cycle mode: `NORMAL` → `CHR` → `CHR 1/100` → `NORMAL` |
+| **Lower LCD — left half** | Stop chrono if running · Reset to `00:00:00` if stopped |
+| **Lower LCD — right half** | Start chrono · Freeze lap display (2nd tap while running) · Resume live display (3rd tap) |
+| **Centre hub** | Park / unpark analog hands |
+| **Dial (everywhere else)** | Cycle LCD colour |
+
+### Display modes
 
 **Upper LCD**
 
-| State | Shows |
+| Mode | Shows |
 |---|---|
-| Chrono at zero | `MON 07 JUL` (date) |
-| Chrono running or paused (SEC mode) | `CHR` |
-| Chrono running or paused (1/100 mode) | `CHR 1/100` |
+| `NORMAL` | `MON 07 JUL` — current date |
+| `CHR` | `CHR` — seconds precision active |
+| `CHR 1/100` | `CHR 1-100` — hundredths precision active |
 
 **Lower LCD**
 
-| State | Shows |
-|---|---|
-| Chrono at zero | UTC time — `14:32:07` |
-| Chrono active, SEC mode | Elapsed — `00:01:23` |
-| Chrono active, 1/100 mode | Elapsed — `01:23.45` |
+| Mode / State | Content | Format |
+|---|---|---|
+| `NORMAL` | UTC time | `HH:MM:SS` |
+| `CHR` — chrono elapsed | Hours : minutes : seconds | `HH:MM:SS` |
+| `CHR 1/100` — chrono elapsed | Minutes : seconds . centiseconds | `MM:SS.cc` |
+| Lap frozen (any CHR mode) | Split time snapshot | same format; label shows `LAP` |
 
 ---
 
@@ -95,10 +99,11 @@ AviatorChronoApp/
 └── app/src/main/
     ├── AndroidManifest.xml            Standalone Wear app, no permissions
     ├── res/drawable/
-    │   └── watch_face_clean_blue.png  Runtime copy of the dial image
+    │   ├── watch_face_clean_blue.png  Runtime copy of the dial image
+    │   └── jas_plane.png              Aviation-red JAS aircraft (chrono hand tip)
     └── java/com/aviatorchrono/app/
-        ├── MainActivity.kt            Compose UI, screen-lock wiring, LCD layout
-        ├── ChronoState.kt             Start/stop/reset state machine + LCD colour enum
+        ├── MainActivity.kt            Compose UI, tap routing, LCD layout, animation
+        ├── ChronoState.kt             Start/stop/reset/lap state machine + enums
         ├── AviatorDial.kt             Analog hands Canvas composable + colour tokens
         └── SevenSegmentDisplay.kt     7-segment digit renderer (auto-fits to panel size)
 ```

@@ -1,6 +1,6 @@
 # Aviator Chrono — Technical Specification
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Platform:** Wear OS 3+ (minSdk 30)  
 **Package:** `com.aviatorchrono.app`  
 **Repository:** https://github.com/Anqv/AviatorChronoApp
@@ -55,7 +55,8 @@ The app uses a minimal three-layer architecture with no ViewModel, no Room, and 
 ```
 ┌─────────────────────────────────────────┐
 │              MainActivity               │  Activity — lifecycle, screen lock,
-│         AviatorChronoScreen             │  Compose entry point, UI composition
+│         AviatorChronoScreen             │  Compose entry point, UI composition,
+│                                         │  tap routing, sweep animation
 ├─────────────────────────────────────────┤
 │              ChronoState                │  State holder — Compose mutableStateOf,
 │                                         │  all business logic, enums
@@ -67,11 +68,11 @@ The app uses a minimal three-layer architecture with no ViewModel, no Room, and 
 
 ### 3.1 Refresh loop
 
-A `LaunchedEffect` coroutine polls `System.currentTimeMillis()` at **10 Hz** (100 ms interval). This is sufficient for:
+A `LaunchedEffect` coroutine polls `System.currentTimeMillis()` at **10 Hz** (100 ms interval). This drives:
 
-- Smooth analog hand movement (16 ms / frame is handled by Compose recomposition; 10 Hz provides the input)
-- Smooth 7-segment second and hundredths display
-- Acceptable chrono sweep hand motion
+- Analog hand angle calculations
+- 7-segment second and hundredths display
+- Chrono sweep hand position
 
 CPU and battery impact is negligible compared to the display staying on.
 
@@ -93,22 +94,23 @@ CPU and battery impact is negligible compared to the display staying on.
 - Activity lifecycle (`onCreate`, `onPause`)
 - `setContent {}` with `AviatorChronoScreen`
 - Window flag management (`FLAG_KEEP_SCREEN_ON`)
-- `AviatorChronoScreen` composable — full UI layout
+- `AviatorChronoScreen` composable — full UI layout and tap routing
+- Chrono sweep-back animation (`Animatable`, `LaunchedEffect`)
 - `formatChrono()` — elapsed time formatting
 - `dayAbbrev()` / `monthAbbrev()` — locale-aware date strings
 
-**Key composable structure:**
+**Composable layer stack (bottom to top):**
 
 ```
 BoxWithConstraints (fillMaxSize)
+├── Box (fillMaxSize, pointerInput) — single tap dispatcher
 ├── Canvas — PNG background (nativeCanvas.drawBitmap, scaled to fill)
-├── Box (fillMaxSize, clickable) — dial tap zone
-├── Box (upper LCD position, clickable) — Canvas with 7-seg content
-├── Box (lower LCD position, clickable) — Canvas with 7-seg content
+├── Box (upper LCD position) — Canvas with 7-seg content
+├── Box (lower LCD position) — Canvas with 7-seg content
 └── AviatorDial — analog hands Canvas (top layer, no touch handling)
 ```
 
-Touch events are consumed by the topmost matching composable. LCD panel boxes appear above the dial tap zone in the composition tree and therefore intercept taps within their bounds before the full-screen dial handler.
+All touch events are handled by a single `detectTapGestures` dispatcher that routes by fractional screen coordinates (see §10).
 
 ### 4.2 `ChronoState.kt`
 
@@ -118,7 +120,7 @@ Touch events are consumed by the topmost matching composable. LCD panel boxes ap
 
 | Enum | Values |
 |---|---|
-| `ChronoPrecision` | `SEC`, `HUNDREDTHS` |
+| `WatchMode` | `NORMAL`, `CHR`, `CHR_HUNDREDTHS` |
 | `LockPreference` | `AUTO`, `OFF` |
 | `LcdColor` | `AMBER`, `GREEN`, `RED`, `BLUE`, `YELLOW` |
 
@@ -130,40 +132,51 @@ Each `LcdColor` entry carries its own `onColor` (active segment) and `offColor` 
 |---|---|---|---|
 | `running` | `Boolean` | `false` | public read, private set |
 | `elapsedMs` | `Long` | `0L` | public read, private set |
-| `precision` | `ChronoPrecision` | `SEC` | public read, private set |
+| `watchMode` | `WatchMode` | `NORMAL` | public read, private set |
 | `lockPreference` | `LockPreference` | `AUTO` | public read, private set |
 | `lcdColor` | `LcdColor` | `AMBER` | public read, private set |
+| `parkedMode` | `Boolean` | `false` | public read, private set |
+| `lapMode` | `Boolean` | `false` | public read, private set |
+| `lapElapsedMs` | `Long` | `0L` | public read, private set |
+| `resetCount` | `Int` | `0` | public read, private set |
 
 **Private fields:**
 
 | Field | Purpose |
 |---|---|
 | `startedAtMs` | Timestamp of the most recent start call |
-| `lastStopAtMs` | Timestamp of the most recent stop; used for reset detection |
 
 **Computed properties:**
 
 ```kotlin
-isNavigationActive = lockPreference == AUTO && running && precision == SEC
-isChronoActive     = running || elapsedMs > 0L
+isNavigationActive = lockPreference == AUTO && running && watchMode == CHR
+currentElapsedMs(nowMs) = if (running) elapsedMs + (nowMs - startedAtMs) else elapsedMs
 ```
 
 ### 4.3 `AviatorDial.kt`
 
-Draws only the analog hands and center hub onto a `Canvas(modifier)`. The PNG background is rendered by `MainActivity` before this composable in the layer stack, so no background drawing happens here.
+Draws only the analog hands and center hub onto a `Canvas(modifier)`. The PNG background is rendered by `MainActivity` before this composable in the layer stack.
 
 **Hands drawn (bottom to top):**
 
-| Hand | Length (% radius) | Color | Width |
+| Hand | Length (% radius) | Color | Notes |
 |---|---|---|---|
-| Chrono sweep | 60% | Orange 90% alpha | 2.5 px |
-| Second | 82% | Orange | 2 px |
-| Minute | 70% | Cream (silver) | 6 px |
-| Hour | 48% | Cream (silver) | 9 px |
-| Hub circle | r=7 px | Cream | — |
-| Hub inner dot | r=2.5 px | `#1A1A1A` | — |
+| Hour (sword) | 50% | Silver + lume inlay | Parked at 90° (3 o'clock) when `parkedMode` |
+| Minute (sword) | 72% | Silver + lume inlay | Parked at 270° (9 o'clock) when `parkedMode` |
+| Second | 84% (tip), 22% (tail) | Aviation red | Hidden (`null`) when `parkedMode` |
+| Chrono sweep | 62% | Aviation red | JAS aircraft bitmap at tip; `null` in NORMAL mode |
+| Hub circles | — | Silver / dark / silver | Three concentric circles, topmost layer |
 
 Also defines the shared design token `Color` constants used across files (see §7).
+
+**Chrono sweep bitmap transform** (`drawChronoSweep`):
+
+The `jas_plane.png` bitmap has its nose at pixel row 0. The `android.graphics.Matrix` chain applied (operations execute in reverse declaration order on pixels):
+
+1. `postScale(scale, scale)` — resize to target height
+2. `postTranslate(-scaledW/2, 0)` — centre nose on local origin
+3. `postRotate(+angleDeg)` — CW rotation aligns the tail (positive-Y axis) toward the dial centre in Android's Y-down coordinate system
+4. `postTranslate(tip.x, tip.y)` — place nose at sweep-arm tip
 
 ### 4.4 `SevenSegmentDisplay.kt`
 
@@ -200,29 +213,33 @@ fun sevenSegFitSize(
 ## 5. Chronograph State Machine
 
 ```
-         ┌─────────────────────────────┐
-         │           RESET             │
-         │  running=false, elapsed=0   │◄──── double-tap within 400ms of stop
-         └────────────┬────────────────┘      (only if elapsed > 0)
-                      │ tap
+         ┌──────────────────────────────┐
+         │           NORMAL             │
+         │  running=false, elapsed=0    │◄──── lower-LCD left tap (reset)
+         └────────────┬─────────────────┘      when stopped & elapsed > 0
+                      │ lower-LCD right tap (start)
                       ▼
-         ┌─────────────────────────────┐
-         │           RUNNING           │
-         │  running=true               │
-         │  elapsed accumulates live   │
-         └────────────┬────────────────┘
-                      │ tap
-                      ▼
-         ┌─────────────────────────────┐
-         │           STOPPED           │
-         │  running=false              │
-         │  elapsed frozen             │
-         └─────────────────────────────┘
+         ┌──────────────────────────────┐
+         │           RUNNING            │
+         │  running=true                │
+         │  elapsed accumulates live    │
+         └──────┬──────────┬────────────┘
+                │ right tap │ left tap
+                ▼           ▼
+         ┌──────────┐  ┌────────────────┐
+         │ LAP MODE │  │    STOPPED     │
+         │ display  │  │ running=false  │
+         │ frozen   │  │ elapsed frozen │
+         └──────────┘  └────────────────┘
+          right tap →
+          resume live
 ```
 
-**Reset detection:** `toggleStartStop(nowMs)` is called on every dial tap. When `running == false`, if `nowMs - lastStopAtMs < 400ms AND elapsedMs > 0`, the state resets instead of starting. This makes a second tap within 400 ms of stopping act as a reset.
+**Elapsed time accumulation:** `elapsedMs` stores the sum of all completed intervals. The live value is `currentElapsedMs(nowMs) = elapsedMs + (nowMs - startedAtMs)` while running. On stop, `(nowMs - startedAtMs)` is added to `elapsedMs` before clearing `running`.
 
-**Elapsed time accumulation:** `elapsedMs` stores the sum of all completed intervals. The live value is `elapsedMs + (nowMs - startedAtMs)` while running. On stop, `(nowMs - startedAtMs)` is added to `elapsedMs` before clearing `running`.
+**Lap/split:** Tapping the right half of the lower LCD while running stores `currentElapsedMs(nowMs)` in `lapElapsedMs` and sets `lapMode = true`. The lower LCD then displays the frozen `lapElapsedMs`. A second right-tap clears `lapMode` and resumes the live display. Stopping the chrono also clears `lapMode`.
+
+**Reset:** Tapping the left half of the lower LCD while stopped (and `elapsedMs > 0`) resets `elapsedMs = 0` and increments `resetCount`. `resetCount` is used as a `LaunchedEffect` key in `MainActivity` to trigger the sweep-back animation.
 
 ---
 
@@ -230,49 +247,60 @@ fun sevenSegFitSize(
 
 ### 6.1 Upper LCD panel
 
-The upper LCD acts as a **mode indicator**.
+The upper LCD acts as a **mode indicator**, cycled by tapping it.
 
-| Condition | Label shown | Value shown |
-|---|---|---|
-| `!isChronoActive` | — | `MON 07 JUL` (date, mixed text + 7-seg) |
-| `isChronoActive && precision == SEC` | — | `CHR` (7-seg) |
-| `isChronoActive && precision == HUNDREDTHS` | — | `CHR 1-100` (7-seg) |
+| `WatchMode` | Content |
+|---|---|
+| `NORMAL` | `MON 07 JUL` — day abbrev + 7-seg day number + month abbrev |
+| `CHR` | `CHR` (7-seg letters) |
+| `CHR_HUNDREDTHS` | `CHR 1-100` (7-seg letters and digits) |
 
-Date rendering: day-of-week abbreviation (`MON`) and month abbreviation (`JUL`) are drawn as native monospace text via `nativeCanvas.drawText`; the day number (`07`) is drawn as 7-segment digits. All three are vertically aligned by baseline and horizontally centred as a group.
+Date rendering: day-of-week abbreviation (`MON`) and month abbreviation (`JUL`) are drawn as native monospace text via `nativeCanvas.drawText`; the day number (`07`) is drawn as 7-segment digits. All three are vertically aligned and horizontally centred as a group.
 
 ### 6.2 Lower LCD panel
 
 The lower LCD shows the **primary numeric readout** — digits are auto-sized to fill the panel.
 
-| Condition | Content | Format |
+| State | Content | Format |
 |---|---|---|
-| `!isChronoActive` | UTC time | `HH:MM:SS` |
-| `isChronoActive && precision == SEC` | Chrono elapsed | `HH:MM:SS` |
-| `isChronoActive && precision == HUNDREDTHS` | Chrono elapsed | `MM:SS.cc` |
+| `NORMAL` mode | UTC time | `HH:MM:SS` |
+| `CHR` mode | Chrono elapsed (or lap snapshot) | `HH:MM:SS` |
+| `CHR_HUNDREDTHS` mode | Chrono elapsed (or lap snapshot) | `MM:SS.cc` |
 
-A small context label (`UTC` or `CHR`) is drawn in dim offColor at the bottom-right corner of the panel for readability.
+A small dim label at the bottom-right corner shows `UTC`, `CHR`, `1/100`, or `LAP` for context.
+
+A vertical divider line at the horizontal midpoint of the panel marks the STOP|RESET (left) / START (right) tap boundary.
 
 ### 6.3 Chrono time formatting (`formatChrono`)
 
 ```
-SEC mode:        HH:MM:SS   (hours : minutes : seconds)
-HUNDREDTHS mode: MM:SS.cc   (minutes : seconds . centiseconds)
+CHR mode:           HH:MM:SS   (hours : minutes : seconds)
+CHR_HUNDREDTHS mode: MM:SS.cc  (minutes : seconds . centiseconds)
 ```
-
-Maximum displayable time before overflow:
-- SEC mode: 99:59:59 (≈100 hours)
-- HUNDREDTHS mode: 99:59.99 (≈100 minutes)
 
 ### 6.4 Analog hands
 
-Hand angles are calculated from `System.currentTimeMillis()` on every 10 Hz tick:
+Hand angles are calculated from `System.currentTimeMillis()` on every 10 Hz tick. When `parkedMode` is true the time hands are overridden to fixed positions and the second hand is hidden.
 
 ```
-hourAngle   = hour12 × 30° + minute × 0.5°
-minuteAngle = minute × 6° + second × 0.1°
-secondAngle = second × 6° + millis × 0.006°
-chronoAngle = (elapsedMs / 1000 mod 60) × 6°
+hourAngle   = hour12 × 30° + minute × 0.5°   (or 90° when parked)
+minuteAngle = minute × 6° + second × 0.1°    (or 270° when parked)
+secondAngle = second × 6° + millis × 0.006°  (or null when parked)
+chronoAngle = (elapsedMs / 1000 mod 60) × 6° (driven by displayedChronoAngle in NORMAL/reset)
 ```
+
+### 6.5 Chrono sweep animation
+
+`displayedChronoAngle` is an `Animatable<Float>` that:
+
+- **Snaps** to the live `chronoAngle` each tick while `chrono.running == true` in CHR/CHR_HUNDREDTHS mode
+- **Animates CCW to 0** at 90°/s (`tween(ms, LinearEasing)`) when either:
+  - `watchMode` switches to `NORMAL`
+  - `resetCount` increments (reset while in CHR mode)
+
+`AviatorDial` receives `displayedChronoAngle.value` (not the raw `chronoAngle`), so the visible hand follows the animation.
+
+**Race-condition guard:** the snap-to-live-angle `LaunchedEffect` only fires when `chrono.running == true`. This prevents the effect from racing with the sweep-back animation on a reset (when `chronoAngle` drops to 0 in the same recomposition that increments `resetCount`).
 
 ---
 
@@ -283,11 +311,14 @@ chronoAngle = (elapsedMs / 1000 mod 60) × 6°
 | Token | Hex | Used for |
 |---|---|---|
 | `DialBackground` | `#0A1433` | Fallback background if PNG fails to load |
-| `Cream` | `#D0D8E4` | Hour and minute hands |
-| `Orange` | `#FF6B1A` | Second hand, chrono sweep |
+| `DialOutline` | `#2A4070` | (unused after PNG background; kept for compat) |
+| `Cream` | `#D0D8E4` | Hour and minute hand outer colour |
+| `Orange` | `#DC0A1E` | Aviation red — both second hands and chrono sweep |
+| `MinorTick` | `#4A5A70` | (unused after PNG background; kept for compat) |
+| `Teal` | `#4A9B94` | (unused; kept for compat) |
 | `LcdBackground` | `#050D05` | LCD panel fill |
 | `LcdBorder` | `#1E2E1E` | LCD panel border |
-| `LcdLabel` | `#607060` | Reserved (currently unused in UI) |
+| `LcdLabel` | `#607060` | Reserved |
 
 ### 7.2 LCD segment colours
 
@@ -307,12 +338,12 @@ Ghost (off) segments are always drawn — they give the authentic LCD look of in
 
 Panel positions were measured pixel-by-pixel from `watch_face_clean_blue.png` (613 × 613 px) using Pillow. Fractional coordinates are applied to the live screen size via `BoxWithConstraints`.
 
-| Panel | Top | Bottom | Left | Right | Height frac | Width frac |
-|---|---|---|---|---|---|---|
-| Upper | 0.1746 | 0.3002 | 0.2088 | 0.7928 | 0.1256 | 0.5840 |
-| Lower | 0.6493 | 0.8254 | 0.2088 | 0.7928 | 0.1761 | 0.5840 |
+| Panel | Top (Y1) | Bottom (Y2) | Left (X1) | Right (X2) | Mid-X |
+|---|---|---|---|---|---|
+| Upper | 0.1746 | 0.3002 | 0.2088 | 0.7928 | — |
+| Lower | 0.6493 | 0.8254 | 0.2088 | 0.7928 | 0.5008 |
 
-Both panels share the same horizontal bounds (centred on the dial).
+Both panels share the same horizontal bounds. The lower LCD mid-X (`LCD_XM = 0.5008`) divides the STOP|RESET tap zone (left) from the START tap zone (right).
 
 ---
 
@@ -350,6 +381,11 @@ Each segment is a `drawLine` call with `StrokeCap.Round`. Endpoints are inset by
 | `9` | `1111011` | a b c d f g |
 | `-` | `0000001` | g |
 | ` ` | `0000000` | (none) |
+| `C` | `1001110` | a d e f |
+| `H` | `0110111` | b c e f g |
+| `R` | `0000101` | e g (lowercase-r style; avoids P confusion) |
+| `h` | `0010111` | c e f g |
+| `r` | `0000101` | e g |
 
 ### 9.3 Spacing constants
 
@@ -375,14 +411,15 @@ Computes the maximum digit size that fits a given text string in a bounding box:
 
 ## 10. Interaction Model
 
-| Target | Gesture | Action |
-|---|---|---|
-| Dial (outside LCD panels) | Single tap | `chrono.toggleStartStop(nowMs)` |
-| Dial (outside LCD panels) | Double-tap while stopped (< 400 ms) | Reset chrono to zero |
-| Upper LCD panel | Single tap | `chrono.togglePrecision()` → SEC ↔ HUNDREDTHS |
-| Lower LCD panel | Single tap | `chrono.cycleLcdColor()` → AMBER→GREEN→RED→BLUE→YELLOW→AMBER |
+All touch is handled by a single `detectTapGestures` dispatcher attached to a full-screen `Box`. Fractional coordinates determine the action.
 
-Touch routing: Compose processes events top-down in the composition tree. LCD `Box` composables are placed after (above) the full-screen dial tap zone, so they intercept taps first within their bounds. The dial tap zone catches everything else.
+| Zone | Bounds (fractional) | Action |
+|---|---|---|
+| Upper LCD | x: 20.9–79.3%, y: 17.5–30.0% | `chrono.cycleMode()` → NORMAL→CHR→CHR_HUNDREDTHS→NORMAL |
+| Lower LCD left | x: 20.9–50.1%, y: 64.9–82.5% | `chrono.stopOrReset(nowMs)` |
+| Lower LCD right | x: 50.1–79.3%, y: 64.9–82.5% | `chrono.startContinue(nowMs)` |
+| Centre hub | x: 42.5–57.5%, y: 42.5–57.5% | `chrono.toggleParkedMode()` |
+| Dial (everything else) | — | `chrono.cycleLcdColor()` |
 
 ---
 
@@ -390,11 +427,11 @@ Touch routing: Compose processes events top-down in the composition tree. LCD `B
 
 The lock engages automatically when all three conditions hold simultaneously:
 
-```
-isNavigationActive = (lockPreference == AUTO) && running && (precision == SEC)
+```kotlin
+isNavigationActive = (lockPreference == AUTO) && running && (watchMode == CHR)
 ```
 
-The rationale: hundredths mode implies a short-duration stopwatch context (not navigation), so the lock is released to save battery. If the user switches to `LockPreference.OFF`, the lock never engages regardless of chrono state.
+The rationale: hundredths mode implies a short-duration stopwatch context (not navigation), so the lock is released to save battery. In NORMAL mode the chrono is not running, so the lock is never engaged there either.
 
 `onPause()` always clears `FLAG_KEEP_SCREEN_ON` — the lock can never persist after the app is backgrounded.
 
@@ -410,7 +447,15 @@ The rationale: hundredths mode implies a short-duration stopwatch context (not n
 
 At runtime it is decoded with `BitmapFactory.decodeResource` (held in `remember {}`) and drawn on the main Canvas via `nativeCanvas.drawBitmap(..., RectF(0,0,w,h), null)` to fill the screen exactly.
 
-### 12.2 App icon
+### 12.2 JAS aircraft bitmap
+
+`jas_plane.png` is a transparency-keyed PNG derived from `JAS.bmp`:
+- Dark pixels → aviation red (RGBA `#DC0A1E`, full opacity)
+- Light pixels → fully transparent
+
+The bitmap has the aircraft nose at pixel row 0. It is drawn at the tip of the chrono sweep hand via a `Matrix` that scales, centres the nose at the origin, rotates CW by the sweep angle, and translates to the tip position on screen.
+
+### 12.3 App icon
 
 | Resource | Format | Purpose |
 |---|---|---|
@@ -423,16 +468,14 @@ At runtime it is decoded with `BitmapFactory.decodeResource` (held in `remember 
 | `drawable/ic_launcher_foreground.xml` | Vector 108 dp | Adaptive foreground |
 | `drawable/ic_launcher_background.xml` | Shape (solid) | Adaptive background (`#0A1433`) |
 
-Icon design: navy dial, silver bezel ring, orange 12 o'clock aviation triangle, cream hour/minute hands at 10:10, orange second hand, silver center hub.
-
 ---
 
 ## 13. Future Extension Points
 
 | Feature | Notes |
 |---|---|
-| Additional modes (alarm, timer) | Add a new `WatchMode` enum value; upper LCD already routes on mode |
+| Additional modes (alarm, timer) | Add a new `WatchMode` enum value; `cycleMode()` and upper LCD already route on mode |
 | Wear OS Complications | Expose chrono running state as a `SHORT_TEXT` complication provider in a separate module |
-| Ambient mode | Pass `secondAngleDeg = null` and `chronoAngleDeg = null` to `AviatorDial` to hide thin hands; reduce LCD to static UTC display |
+| Ambient mode | Pass `secondAngleDeg = null` and `chronoAngleDeg = null` to `AviatorDial`; reduce LCD to static UTC display |
 | Persistent chrono | Save `elapsedMs` + `startedAtMs` + `running` to `DataStore` on stop/pause to survive process death |
 | Additional LCD colours | Add entries to the `LcdColor` enum; `next()` cycles automatically |

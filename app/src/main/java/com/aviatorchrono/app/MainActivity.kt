@@ -8,6 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -96,6 +99,37 @@ fun AviatorChronoScreen(
 
     val chronoElapsed = chrono.currentElapsedMs(nowMs)
     val chronoAngle   = ((chronoElapsed / 1000.0) % 60.0 * 6.0).toFloat()
+
+    // Displayed chrono angle — follows live angle in CHR mode, sweeps back CCW to 0
+    // when returning to NORMAL or on reset. Speed: 90°/s (180° in 2 s).
+    val displayedChronoAngle = remember { Animatable(0f) }
+
+    // In CHR mode: keep displayed angle in sync with live angle.
+    // Only snap while the chrono is running — prevents racing with the sweep-back
+    // animation when a reset fires (elapsedMs→0 makes chronoAngle jump to 0 first).
+    LaunchedEffect(chronoAngle, chrono.watchMode) {
+        if (chrono.watchMode != WatchMode.NORMAL && chrono.running && !displayedChronoAngle.isRunning) {
+            displayedChronoAngle.snapTo(chronoAngle)
+        }
+    }
+
+    // Helper: animate CCW from current value to 0 at 90°/s
+    suspend fun sweepBackToZero() {
+        val from = displayedChronoAngle.value
+        val ms   = (from / 90f * 1000f).toInt()
+        if (ms > 50) displayedChronoAngle.animateTo(0f, tween(ms, easing = LinearEasing))
+        else          displayedChronoAngle.snapTo(0f)
+    }
+
+    // Trigger on mode → NORMAL
+    LaunchedEffect(chrono.watchMode) {
+        if (chrono.watchMode == WatchMode.NORMAL) sweepBackToZero()
+    }
+
+    // Trigger on chrono reset (while in CHR mode)
+    LaunchedEffect(chrono.resetCount) {
+        if (chrono.resetCount > 0 && chrono.watchMode != WatchMode.NORMAL) sweepBackToZero()
+    }
 
     val lcdOn  = chrono.lcdColor.onColor
     val lcdOff = chrono.lcdColor.offColor
@@ -272,7 +306,7 @@ fun AviatorChronoScreen(
             hourAngleDeg   = hourAngle,
             minuteAngleDeg = minuteAngle,
             secondAngleDeg = secondAngle,
-            chronoAngleDeg = if (chrono.watchMode == WatchMode.NORMAL) 0f else chronoAngle,
+            chronoAngleDeg = displayedChronoAngle.value,
             modifier       = Modifier.fillMaxSize()
         )
     }

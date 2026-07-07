@@ -39,6 +39,10 @@ class ChronoState {
     var parkedMode by mutableStateOf(false)
         private set
 
+    // Increments each time the counter is actually reset to zero (animation trigger)
+    var resetCount by mutableStateOf(0)
+        private set
+
     // Split/lap: display frozen at lapElapsedMs while chrono keeps counting
     var lapMode by mutableStateOf(false)
         private set
@@ -72,6 +76,7 @@ class ChronoState {
         } else if (elapsedMs > 0L) {
             elapsedMs = 0L
             lapMode = false
+            resetCount++
         }
     }
 

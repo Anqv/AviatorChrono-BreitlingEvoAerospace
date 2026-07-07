@@ -1,74 +1,116 @@
-# Aviator Chrono — Wear OS App (Galaxy Watch4+)
+# Aviator Chrono
 
-Standalone Wear OS app (not a watch face) — same design as the Tizen version,
-rebuilt to keep the full chronograph logic and the screen-awake lock, which
-Wear OS's Watch Face Format doesn't allow.
+A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with authentic analog hands and dual amber 7-segment LCD panels. Built for Galaxy Watch 4 and later (any Wear OS 3+ device).
 
-## Why an app instead of a watch face
-Watch Face Format (WFF), required for installing watch faces on Wear OS,
-is declarative XML with no room for a real start/stop/reset state machine
-or a screen-lock override. A foreground **app**, on the other hand, is
-allowed to hold the screen on via `FLAG_KEEP_SCREEN_ON` for as long as
-it's in the foreground — the same mechanism workout and timer apps use.
-That's what this project does.
+<p align="center">
+  <img src="watch_face_clean_blue.png" width="280" alt="Aviator Chrono watch face"/>
+</p>
+
+---
+
+## Features
+
+- **Breitling EVO Aerospace dial** — authentic PNG background with bezel, Arabic numerals, and wing badge
+- **Analog hands** — hour, minute, and orange second/chrono-sweep hands drawn over the dial
+- **Upper LCD panel** — shows date (`MON 07 JUL`) at rest; switches to `CHR` or `CHR 1/100` mode label when the chronograph is active
+- **Lower LCD panel** — shows UTC time (`HH:MM:SS`) at rest; switches to chronograph readout when timing
+- **Two chrono precision modes**
+  - `SEC` — `HH:MM:SS` (default, ideal for navigation timing)
+  - `1/100` — `MM:SS.cc` (hundredths of a second)
+- **Five LCD colours** — tap the lower panel to cycle: Amber → Green → Red → Blue → Yellow
+- **Screen-awake lock** — holds the display on automatically while the chronograph is running in SEC mode (same `FLAG_KEEP_SCREEN_ON` mechanism used by workout apps)
+- **No phone required** — standalone app, installs directly on the watch
+
+---
+
+## Usage
+
+| Gesture | Action |
+|---|---|
+| Tap the dial | Start / stop the chronograph |
+| Double-tap the dial while stopped | Reset to `00:00:00` |
+| Tap the **upper LCD** | Toggle precision: `SEC` ↔ `1/100` |
+| Tap the **lower LCD** | Cycle LCD colour (Amber → Green → Red → Blue → Yellow) |
+
+### Display logic
+
+**Upper LCD**
+
+| State | Shows |
+|---|---|
+| Chrono at zero | `MON 07 JUL` (date) |
+| Chrono running or paused (SEC mode) | `CHR` |
+| Chrono running or paused (1/100 mode) | `CHR 1/100` |
+
+**Lower LCD**
+
+| State | Shows |
+|---|---|
+| Chrono at zero | UTC time — `14:32:07` |
+| Chrono active, SEC mode | Elapsed — `00:01:23` |
+| Chrono active, 1/100 mode | Elapsed — `01:23.45` |
+
+---
+
+## Building
+
+### Requirements
+
+- **Android Studio Hedgehog** or later (bundled JDK 17+ required)
+- Wear OS emulator **or** a physical Galaxy Watch 4 / 5 / 6 / 7 (or any Wear OS 3+ device)
+
+### Steps
+
+1. Clone the repo:
+   ```
+   git clone https://github.com/Anqv/AviatorChronoApp.git
+   ```
+2. Open the `AviatorChronoApp` folder in Android Studio. Gradle syncs automatically.
+3. Set up a target:
+   - **Emulator**: Tools → Device Manager → Create Device → Wear OS → *Large Round*
+   - **Physical watch**: enable Developer Options (tap build number 7×), enable ADB over Wi-Fi, then `adb connect <watch-ip>:5555`
+4. Press **Run ▶** and select your target.
+
+### Command-line build
+
+```bash
+# On Windows, point to Android Studio's bundled JDK:
+JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew assembleDebug
+
+# Install directly to a connected watch:
+JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew installDebug
+```
+
+The APK ends up at `app/build/outputs/apk/debug/app-debug.apk`.
+
+---
 
 ## Project layout
+
 ```
 AviatorChronoApp/
-├── settings.gradle.kts
-├── build.gradle.kts
-└── app/
-    ├── build.gradle.kts          Wear Compose dependencies, minSdk 30
-    └── src/main/
-        ├── AndroidManifest.xml    Standalone Wear app declaration
-        ├── java/com/aviatorchrono/app/
-        │   ├── MainActivity.kt     Compose UI + screen-lock wiring
-        │   ├── ChronoState.kt       Start/stop/reset/precision state machine
-        │   └── AviatorDial.kt        Canvas-drawn analog dial
-        └── res/
-            ├── mipmap-hdpi/ic_launcher.png   (placeholder icon)
-            ├── mipmap-xhdpi/ic_launcher.png
-            └── values/strings.xml
+├── watch_face_clean_blue.png          Breitling dial artwork (background)
+└── app/src/main/
+    ├── AndroidManifest.xml            Standalone Wear app, no permissions
+    ├── res/drawable/
+    │   └── watch_face_clean_blue.png  Runtime copy of the dial image
+    └── java/com/aviatorchrono/app/
+        ├── MainActivity.kt            Compose UI, screen-lock wiring, LCD layout
+        ├── ChronoState.kt             Start/stop/reset state machine + LCD colour enum
+        ├── AviatorDial.kt             Analog hands Canvas composable + colour tokens
+        └── SevenSegmentDisplay.kt     7-segment digit renderer (auto-fits to panel size)
 ```
 
-## How to open and run it
+---
 
-1. **Install Android Studio** (`developer.android.com/studio`).
-2. **File → Open**, select the `AviatorChronoApp` folder. Let Gradle sync —
-   it'll pull the Compose-for-Wear and AndroidX dependencies automatically.
-3. **Get a Wear OS target**:
-   - **Emulator**: Tools → Device Manager → Create Device → Wear OS
-     category → pick a round profile (Large Round matches Watch4/5/6/7).
-   - **Physical watch**: on the watch, tap the build number under
-     **Settings → About watch → Software** a few times to unlock
-     Developer options, then enable **ADB debugging** + **Debug over Wi-Fi**.
-     Connect via `adb connect <watch-ip>:5555` (same network as your PC).
-4. **Run ▶** in Android Studio, pick your target. No phone pairing or
-   companion app is required — `com.google.android.wearable.standalone`
-   in the manifest marks it installable directly on the watch.
+## Why an app instead of a watch face
 
-## Using it
-- **Tap the dial** → start/stop the chronograph. **Tap again quickly while
-  stopped** → reset to zero.
-- **Tap the "SEC"/"1/100" label** (top right) → toggle chronograph
-  precision. Defaults to seconds-only for navigation timing.
-- **Tap "SCREEN"** (bottom) → manually override the awake-lock at any time:
-  - **AUTO** — lock engages automatically once navigation starts
-  - **ON** — currently locked, full brightness
-  - **OFF** — manually released; stays off regardless of chrono state
-- The screen-awake lock only ever holds while this app is in the
-  foreground and actively timing in seconds mode — leaving the app or
-  switching to hundredths releases it immediately.
+Wear OS's Watch Face Format (WFF) is declarative XML — there's no room for a real start/stop/reset state machine or a screen-lock override. A foreground **app** can hold the screen on via `FLAG_KEEP_SCREEN_ON` for as long as it stays in the foreground, which is exactly what navigation timing needs. The app appears in the watch's app list and launches like any other app.
+
+---
 
 ## Notes
-- `ic_launcher.png` is placeholder art reused from the Tizen version —
-  swap it for final artwork, and consider adding a proper adaptive icon
-  (`mipmap-anydpi-v26`) before publishing.
-- `minSdk = 30` targets Wear OS 3+, which covers Watch4 and every model
-  since. Nothing here depends on Samsung-specific APIs — this will also
-  run on Pixel Watch or any other Wear OS 3+ device.
-- This is a full app, so it appears in the app list and can be launched
-  like any other — it won't sit as your background watch face. If you
-  ever want a *complication* on your actual watch face that reflects the
-  chrono's running state, that's a separate, smaller piece of work using
-  the Wear OS Complications API — let me know if you want that added.
+
+- `minSdk = 30` — targets Wear OS 3+, covering Watch 4 and every model since. No Samsung-specific APIs are used; it runs on Pixel Watch and other Wear OS 3+ devices too.
+- The screen-awake lock is released immediately when the app is backgrounded (`onPause`) or the lock preference is set to OFF — it never holds the screen on unintentionally.
+- The launcher icon (`mipmap-*/ic_launcher.png`) is placeholder art — swap in final artwork before publishing.

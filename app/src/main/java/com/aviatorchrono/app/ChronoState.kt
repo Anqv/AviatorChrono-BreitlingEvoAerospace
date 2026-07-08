@@ -5,8 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
-// Cycles on every upper-LCD tap: NORMAL → CHR → CHR_HUNDREDTHS → NORMAL → …
-enum class WatchMode { NORMAL, CHR, CHR_HUNDREDTHS }
+// Cycles on every upper-LCD tap: NORMAL → CHR → CHR_HUNDREDTHS → COUNTDOWN → NORMAL → …
+enum class WatchMode { NORMAL, CHR, CHR_HUNDREDTHS, COUNTDOWN }
+
+// Longest countdown the bezel can dial in: 99:59:59
+private const val COUNTDOWN_MAX_MS = (99L * 3600 + 59 * 60 + 59) * 1000
 
 enum class LockPreference { AUTO, OFF }
 
@@ -49,6 +52,63 @@ class ChronoState {
     var lapElapsedMs by mutableStateOf(0L)
         private set
 
+    // Countdown timer (COUNTDOWN mode) — dialed via the bezel, counts down to
+    // 00:00:00 then continues into negative (overtime) until stopped/reset.
+    var countdownSetMs by mutableStateOf(0L)     // frozen/dialed value while not running
+        private set
+    var countdownRunning by mutableStateOf(false)
+        private set
+    var countdownAlarmActive by mutableStateOf(false)
+        private set
+    private var countdownBaseMs: Long = 0L        // remaining ms at the moment running started
+    private var countdownStartedAtMs: Long = 0L
+    private var bezelFirstTurnAtMs: Long? = null
+
+    fun currentCountdownRemainingMs(nowMs: Long): Long =
+        if (countdownRunning) countdownBaseMs - (nowMs - countdownStartedAtMs) else countdownSetMs
+
+    // Bezel rotation while in COUNTDOWN mode. Interrupts a running countdown back
+    // into "dialing", dismisses the alarm, and nudges the dialed value by deltaMs.
+    fun adjustCountdown(nowMs: Long, deltaMs: Long) {
+        if (countdownRunning) {
+            countdownSetMs = currentCountdownRemainingMs(nowMs)
+            countdownRunning = false
+        }
+        countdownAlarmActive = false
+        if (bezelFirstTurnAtMs == null) bezelFirstTurnAtMs = nowMs
+        countdownSetMs = (countdownSetMs + deltaMs).coerceIn(0L, COUNTDOWN_MAX_MS)
+    }
+
+    // Lower LCD RIGHT tap in COUNTDOWN mode — commit the dialed value (minus the
+    // time spent dialing it in) and start counting down.
+    fun countdownStart(nowMs: Long) {
+        countdownAlarmActive = false
+        if (!countdownRunning) {
+            val dialElapsed = bezelFirstTurnAtMs?.let { nowMs - it } ?: 0L
+            countdownBaseMs = countdownSetMs - dialElapsed
+            countdownRunning = true
+            countdownStartedAtMs = nowMs
+            bezelFirstTurnAtMs = null
+        }
+    }
+
+    // Lower LCD LEFT tap in COUNTDOWN mode — pause if running, else reset to zero.
+    fun countdownStopOrReset(nowMs: Long) {
+        countdownAlarmActive = false
+        if (countdownRunning) {
+            countdownSetMs = currentCountdownRemainingMs(nowMs)
+            countdownRunning = false
+            bezelFirstTurnAtMs = null
+        } else if (countdownSetMs != 0L) {
+            countdownSetMs = 0L
+            bezelFirstTurnAtMs = null
+        }
+    }
+
+    fun armCountdownAlarm() {
+        countdownAlarmActive = true
+    }
+
     // Screen-awake lock: only in CHR (seconds) mode while running
     val isNavigationActive: Boolean
         get() = lockPreference == LockPreference.AUTO &&
@@ -63,7 +123,8 @@ class ChronoState {
         watchMode = when (watchMode) {
             WatchMode.NORMAL          -> WatchMode.CHR
             WatchMode.CHR             -> WatchMode.CHR_HUNDREDTHS
-            WatchMode.CHR_HUNDREDTHS  -> WatchMode.NORMAL
+            WatchMode.CHR_HUNDREDTHS  -> WatchMode.COUNTDOWN
+            WatchMode.COUNTDOWN       -> WatchMode.NORMAL
         }
     }
 

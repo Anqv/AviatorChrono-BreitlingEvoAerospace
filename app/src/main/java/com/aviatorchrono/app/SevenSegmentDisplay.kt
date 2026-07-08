@@ -21,6 +21,7 @@ private val DIGIT_SEGMENTS = mapOf(
     ' ' to 0b0000000,
     // Letters used for mode labels
     'C' to 0b1001110,   // a d e f  — top, bottom, bottom-left, top-left
+    'D' to 0b0111101,   // b c d e g — lowercase-d shape, used by the "CD" countdown label
     'H' to 0b0110111,   // b c e f g — all verticals + middle
     'R' to 0b0000101,   // e g — lowercase-r style; avoids P confusion on small screens
     'h' to 0b0010111,   // c e f g  — lowercase h shape

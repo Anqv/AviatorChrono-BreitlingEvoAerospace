@@ -18,7 +18,8 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 - **Upper LCD panel** — shows date (`MON 07 JUL`) in NORMAL mode; switches to `CHR` or `CHR 1-100` label when the chronograph is active
 - **Lower LCD panel** — shows UTC time (`HH:MM:SS`) in NORMAL mode; switches to chronograph readout when timing; a vertical divider marks the STOP|RESET / START zone boundary
 - **Lap / split timer** — freeze the lower LCD at a split time while the chrono keeps running in the background; tap again to resume the live display
-- **Three display modes** — cycled by tapping the upper LCD: `NORMAL` → `CHR` → `CHR 1/100` → `NORMAL`
+- **Countdown timer** — dial in a `HH:MM:SS` countdown with the bezel/rotating crown, start it from the lower LCD, and get a beep at 10s, a double beep at 5s, and a looping alarm at zero (counts up as overtime afterward, shown as ` -:MM:SS`)
+- **Four display modes** — cycled by tapping the upper LCD: `NORMAL` → `CHR` → `CHR 1/100` → `CD` → `NORMAL`
 - **Five LCD colours** — tap anywhere on the dial (outside the LCD panels and hub) to cycle: Amber → Green → Red → Blue → Yellow
 - **Hand parking** — tap the centre hub to park the hour hand at 3, minute hand at 9, and hide the second hand; tap again to unpark
 - **Screen-awake lock** — holds the display on automatically while the chronograph is running in CHR (seconds) mode
@@ -27,15 +28,18 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 
 ## Usage
 
+> For a full walkthrough of every feature (including a step-by-step countdown-timer guide), see **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
+
 ### Tap zones
 
 | Zone | Action |
 |---|---|
-| **Upper LCD** | Cycle mode: `NORMAL` → `CHR` → `CHR 1/100` → `NORMAL` |
-| **Lower LCD — left half** | Stop chrono if running · Reset to `00:00:00` if stopped |
-| **Lower LCD — right half** | Start chrono · Freeze lap display (2nd tap while running) · Resume live display (3rd tap) |
+| **Upper LCD** | Cycle mode: `NORMAL` → `CHR` → `CHR 1/100` → `CD` → `NORMAL` |
+| **Lower LCD — left half** | Stop chrono if running · Reset to `00:00:00` if stopped. In `CD` mode: pause the countdown if running · reset to zero if paused |
+| **Lower LCD — right half** | Start chrono · Freeze lap display (2nd tap while running) · Resume live display (3rd tap). In `CD` mode: start the countdown |
 | **Centre hub** | Park / unpark analog hands |
 | **Dial (everywhere else)** | Cycle LCD colour |
+| **Bezel / rotating crown** | In `CD` mode only: dial the countdown time — clockwise increases, counter-clockwise decreases; faster turns change it faster |
 
 ### Display modes
 
@@ -46,6 +50,7 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 | `NORMAL` | `MON 07 JUL` — current date |
 | `CHR` | `CHR` — seconds precision active |
 | `CHR 1/100` | `CHR 1-100` — hundredths precision active |
+| `CD` | `CD` — countdown timer active |
 
 **Lower LCD**
 
@@ -55,6 +60,15 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 | `CHR` — chrono elapsed | Hours : minutes : seconds | `HH:MM:SS` |
 | `CHR 1/100` — chrono elapsed | Minutes : seconds . centiseconds | `MM:SS.cc` |
 | Lap frozen (any CHR mode) | Split time snapshot | same format; label shows `LAP` |
+| `CD` — dialing / paused | Bezel-set countdown duration | `HH:MM:SS`; label shows `SET` |
+| `CD` — running | Live remaining time | `HH:MM:SS`; label shows `CD` |
+| `CD` — past zero | Elapsed overtime | ` -:MM:SS` (hour digits replaced by a blank cell + `-`, same size as `HH:MM:SS`); label shows `ALM` while the alarm is sounding |
+
+### Countdown timer (`CD` mode)
+
+Turn the bezel to dial in a duration — clockwise increases it, counter-clockwise decreases it, and faster turns move it faster. Tap the lower LCD's right half to start; the timer begins counting down from your dialed value **minus** however long it took you to dial it in (so it accounts for the time you spent setting it). A single beep sounds at 10 seconds remaining, a double beep at 5 seconds, and a looping alarm at zero — silence it by tapping either half of the lower LCD or by turning the bezel to set a new time. Past zero, the display counts up as overtime with the hour digits replaced by a blank cell and a `-` sign (e.g. ` -:00:12`), keeping the figures the same size as the countdown that preceded it. You can change the time and restart at any point, including mid-countdown — turning the bezel always pauses the running timer first so you're adjusting from the current remaining time.
+
+> **Testing in the emulator:** the on-screen crown/bezel graphic on the watch face does *not* send rotary input. Use the emulator toolbar's **⋯ → Rotary input** panel to simulate bezel/crown rotation.
 
 ---
 

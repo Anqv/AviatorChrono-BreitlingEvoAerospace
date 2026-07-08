@@ -1,9 +1,11 @@
 # Aviator Chrono — Technical Specification
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Platform:** Wear OS 3+ (minSdk 30)  
 **Package:** `com.aviatorchrono.app`  
 **Repository:** https://github.com/Anqv/AviatorChronoApp
+
+For end-user instructions rather than implementation details, see **[USER_GUIDE.md](USER_GUIDE.md)**.
 
 ---
 
@@ -96,7 +98,9 @@ CPU and battery impact is negligible compared to the display staying on.
 - Window flag management (`FLAG_KEEP_SCREEN_ON`)
 - `AviatorChronoScreen` composable — full UI layout and tap routing
 - Chrono sweep-back animation (`Animatable`, `LaunchedEffect`)
-- `formatChrono()` — elapsed time formatting
+- Bezel rotary input (`Modifier.onRotaryScrollEvent`) — COUNTDOWN dialing only (see §14)
+- Countdown beep/alarm sound (`ToneGenerator` on `STREAM_ALARM`, see §14.3)
+- `formatChrono()` / `formatCountdown()` — elapsed / remaining time formatting
 - `dayAbbrev()` / `monthAbbrev()` — locale-aware date strings
 
 **Composable layer stack (bottom to top):**
@@ -120,7 +124,7 @@ All touch events are handled by a single `detectTapGestures` dispatcher that rou
 
 | Enum | Values |
 |---|---|
-| `WatchMode` | `NORMAL`, `CHR`, `CHR_HUNDREDTHS` |
+| `WatchMode` | `NORMAL`, `CHR`, `CHR_HUNDREDTHS`, `COUNTDOWN` |
 | `LockPreference` | `AUTO`, `OFF` |
 | `LcdColor` | `AMBER`, `GREEN`, `RED`, `BLUE`, `YELLOW` |
 
@@ -139,12 +143,18 @@ Each `LcdColor` entry carries its own `onColor` (active segment) and `offColor` 
 | `lapMode` | `Boolean` | `false` | public read, private set |
 | `lapElapsedMs` | `Long` | `0L` | public read, private set |
 | `resetCount` | `Int` | `0` | public read, private set |
+| `countdownSetMs` | `Long` | `0L` | public read, private set |
+| `countdownRunning` | `Boolean` | `false` | public read, private set |
+| `countdownAlarmActive` | `Boolean` | `false` | public read, private set |
 
 **Private fields:**
 
 | Field | Purpose |
 |---|---|
 | `startedAtMs` | Timestamp of the most recent start call |
+| `countdownBaseMs` | Remaining countdown ms at the moment running started (see §14) |
+| `countdownStartedAtMs` | Timestamp the countdown last started running |
+| `bezelFirstTurnAtMs` | Timestamp of the first bezel nudge in the current dialing session, or `null` |
 
 **Computed properties:**
 
@@ -254,6 +264,7 @@ The upper LCD acts as a **mode indicator**, cycled by tapping it.
 | `NORMAL` | `MON 07 JUL` — day abbrev + 7-seg day number + month abbrev |
 | `CHR` | `CHR` (7-seg letters) |
 | `CHR_HUNDREDTHS` | `CHR 1-100` (7-seg letters and digits) |
+| `COUNTDOWN` | `CD` (7-seg letters) |
 
 Date rendering: day-of-week abbreviation (`MON`) and month abbreviation (`JUL`) are drawn as native monospace text via `nativeCanvas.drawText`; the day number (`07`) is drawn as 7-segment digits. All three are vertically aligned and horizontally centred as a group.
 
@@ -266,8 +277,9 @@ The lower LCD shows the **primary numeric readout** — digits are auto-sized to
 | `NORMAL` mode | UTC time | `HH:MM:SS` |
 | `CHR` mode | Chrono elapsed (or lap snapshot) | `HH:MM:SS` |
 | `CHR_HUNDREDTHS` mode | Chrono elapsed (or lap snapshot) | `MM:SS.cc` |
+| `COUNTDOWN` mode | Remaining time; past zero (overtime) the hour digits are replaced with a blank cell + `-` | `HH:MM:SS` / ` -:MM:SS` |
 
-A small dim label at the bottom-right corner shows `UTC`, `CHR`, `1/100`, or `LAP` for context.
+A small dim label at the bottom-right corner shows `UTC`, `CHR`, `1/100`, or `LAP` for the chrono modes; `SET`, `CD`, or `ALM` for COUNTDOWN (see §14).
 
 A vertical divider line at the horizontal midpoint of the panel marks the STOP|RESET (left) / START (right) tap boundary.
 
@@ -382,6 +394,7 @@ Each segment is a `drawLine` call with `StrokeCap.Round`. Endpoints are inset by
 | `-` | `0000001` | g |
 | ` ` | `0000000` | (none) |
 | `C` | `1001110` | a d e f |
+| `D` | `0111101` | b c d e g (lowercase-d shape, used by the "CD" countdown label) |
 | `H` | `0110111` | b c e f g |
 | `R` | `0000101` | e g (lowercase-r style; avoids P confusion) |
 | `h` | `0010111` | c e f g |
@@ -415,11 +428,12 @@ All touch is handled by a single `detectTapGestures` dispatcher attached to a fu
 
 | Zone | Bounds (fractional) | Action |
 |---|---|---|
-| Upper LCD | x: 20.9–79.3%, y: 17.5–30.0% | `chrono.cycleMode()` → NORMAL→CHR→CHR_HUNDREDTHS→NORMAL |
-| Lower LCD left | x: 20.9–50.1%, y: 64.9–82.5% | `chrono.stopOrReset(nowMs)` |
-| Lower LCD right | x: 50.1–79.3%, y: 64.9–82.5% | `chrono.startContinue(nowMs)` |
+| Upper LCD | x: 20.9–79.3%, y: 17.5–30.0% | `chrono.cycleMode()` → NORMAL→CHR→CHR_HUNDREDTHS→COUNTDOWN→NORMAL |
+| Lower LCD left | x: 20.9–50.1%, y: 64.9–82.5% | `chrono.stopOrReset(nowMs)`, or `chrono.countdownStopOrReset(nowMs)` in COUNTDOWN mode |
+| Lower LCD right | x: 50.1–79.3%, y: 64.9–82.5% | `chrono.startContinue(nowMs)`, or `chrono.countdownStart(nowMs)` in COUNTDOWN mode |
 | Centre hub | x: 42.5–57.5%, y: 42.5–57.5% | `chrono.toggleParkedMode()` |
 | Dial (everything else) | — | `chrono.cycleLcdColor()` |
+| Bezel / rotating crown | — (hardware, not screen coordinates) | `chrono.adjustCountdown(nowMs, deltaMs)` — only while `watchMode == COUNTDOWN` (see §14) |
 
 ---
 
@@ -470,7 +484,71 @@ The bitmap has the aircraft nose at pixel row 0. It is drawn at the tip of the c
 
 ---
 
-## 13. Future Extension Points
+## 14. Countdown Timer (COUNTDOWN mode)
+
+A fourth `WatchMode`, dialed in with the physical bezel/rotating crown and started/stopped from the same lower-LCD tap zones used by the chronograph. Unlike the chronograph, `countdownSetMs` alone represents three states (mid-dial, paused, freshly reset) — there is no separate "paused" flag.
+
+### 14.1 State machine
+
+```
+         ┌───────────────────────────────┐
+         │            DIALING            │◄─── bezel turn (any time, incl. while RUNNING —
+         │  countdownRunning = false      │      interrupts the run back into DIALING first)
+         │  countdownSetMs adjustable     │
+         └────────────┬───────────────────┘
+                      │ lower-LCD right tap (countdownStart)
+                      ▼
+         ┌───────────────────────────────┐
+         │            RUNNING            │
+         │  countdownRunning = true       │
+         │  remaining ticks down live,    │
+         │  goes negative past 00:00:00   │
+         └────────────┬───────────────────┘
+                      │ lower-LCD left tap (countdownStopOrReset)
+                      ▼
+                  paused (= DIALING, countdownSetMs frozen at live value)
+```
+
+`currentCountdownRemainingMs(nowMs) = countdownBaseMs - (nowMs - countdownStartedAtMs)` while running, else `countdownSetMs`. This can go negative — `formatCountdown()` renders that as `" -:MM:SS"` overtime (§6.2): the tens-of-hours cell goes blank and the ones-of-hours cell shows `-`, rather than dropping the hour digits outright. This keeps the same digit/colon count as `"HH:MM:SS"` (6 digit cells + 2 colons either way), so `sevenSegFitSize()` — which sizes digits purely from character count — computes identical dimensions on both sides of the 00:00:00 crossing instead of the figures jumping larger.
+
+### 14.2 Bezel dial-time compensation
+
+Dialing in a duration with the bezel takes real time. To compensate, `bezelFirstTurnAtMs` records the wall-clock moment of the *first* bezel nudge in a dialing session (subsequent nudges before the next start/stop/reset don't move it). When `countdownStart()` commits:
+
+```kotlin
+dialElapsed     = nowMs - bezelFirstTurnAtMs   // 0 if the bezel was never touched
+countdownBaseMs = countdownSetMs - dialElapsed
+```
+
+So the countdown behaves as if it had already been running for the duration it took to dial it in. The same subtraction applies on every re-dial/re-start cycle, including mid-flight time changes — turning the bezel while running always freezes the live value into `countdownSetMs` first (via `adjustCountdown`), so the pilot is always adjusting from the current remaining time, not from zero.
+
+### 14.3 Beeps and alarm
+
+`MainActivity`'s 100 Hz→10 Hz tick loop (§3.1) additionally tracks the previous tick's `currentCountdownRemainingMs` while in COUNTDOWN mode and edge-detects three thresholds (crossing from above to at-or-below):
+
+| Threshold | Sound |
+|---|---|
+| 10 s remaining | Single beep (`ToneGenerator.TONE_PROP_BEEP`, 150 ms) |
+| 5 s remaining | Double beep (two 120 ms tones, ~180 ms apart, fired via `rememberCoroutineScope()` so it doesn't stall the tick loop) |
+| 0 s (countdown complete) | `chrono.armCountdownAlarm()` sets `countdownAlarmActive = true` |
+
+All tones play on `AudioManager.STREAM_ALARM` via a single `remember`-scoped `ToneGenerator`, released in a `DisposableEffect` — no manifest permission required.
+
+While `countdownAlarmActive` is true, a `LaunchedEffect(chrono.countdownAlarmActive)` loops `TONE_PROP_BEEP2` every 500 ms. Compose cancels this effect automatically the instant the flag flips back to `false`, which happens as a side effect of *any* lower-LCD tap or bezel turn while COUNTDOWN mode is active — giving "ring until dismissed" behavior without any dedicated dismiss button.
+
+### 14.4 Bezel input wiring
+
+`RotaryScrollEvent` (`androidx.compose.ui.input.rotary.onRotaryScrollEvent`, part of core Compose UI — no wear-specific dependency needed) is attached to the same full-screen `Box` that hosts the tap dispatcher, gated with `.focusRequester(...).focusable()`. A `LaunchedEffect(chrono.watchMode)` calls `requestFocus()` whenever `watchMode` becomes `COUNTDOWN`, since rotary events only reach the currently-focused composable.
+
+**Modifier order matters**: `.onRotaryScrollEvent { ... }` must come *before* `.focusRequester(...).focusable()` in the chain (per Android's official rotary-input guidance) — reversed order compiles fine but silently never delivers events.
+
+`event.verticalScrollPixels` is converted to a signed seconds delta via the `COUNTDOWN_SECONDS_PER_PIXEL` constant in `MainActivity.kt`. Rotary pixel deltas already scale with physical turn speed (a fast spin produces a larger delta per callback), so no separate velocity tracking is needed. The clockwise-increases sign convention has been confirmed working on-device; if a future device/OS revision ever reverses it, it's a one-constant flip.
+
+**Testing rotary input in the emulator**: the on-screen crown/bezel graphic on the watch face skin does *not* generate rotary events. Use the emulator toolbar's **⋯ (Extended controls) → Rotary input** panel instead — that's the only way to simulate bezel/crown rotation without a physical device.
+
+---
+
+## 15. Future Extension Points
 
 | Feature | Notes |
 |---|---|
@@ -479,3 +557,4 @@ The bitmap has the aircraft nose at pixel row 0. It is drawn at the tip of the c
 | Ambient mode | Pass `secondAngleDeg = null` and `chronoAngleDeg = null` to `AviatorDial`; reduce LCD to static UTC display |
 | Persistent chrono | Save `elapsedMs` + `startedAtMs` + `running` to `DataStore` on stop/pause to survive process death |
 | Additional LCD colours | Add entries to the `LcdColor` enum; `next()` cycles automatically |
+| Persistent countdown | Save `countdownSetMs` / `countdownRunning` / `countdownStartedAtMs` alongside the chrono fields (§13) |

@@ -53,13 +53,13 @@ Tap the **upper LCD** to cycle: `NORMAL → CHR → CHR 1/100 → CD → NORMAL`
 
 The analog chrono-sweep hand (with the small red aircraft at its tip) always mirrors the true running time, even while a lap is frozen on the LCD. When you stop and reset, it sweeps back to 12 o'clock.
 
-**Screen stays on:** while the chronograph is running in `CHR` mode (seconds precision), the screen is held awake automatically so you don't lose the readout mid-approach. This does not apply in `CHR 1/100` mode, and it always releases the instant you background the app.
+**Screen stays on:** the whole time you're on `CHR` or `CHR 1/100`, the screen is held awake automatically — running, paused, or looking at a frozen split — so you never lose the readout mid-approach. It always releases the instant you background the app or switch back to `NORMAL`.
 
 ---
 
 ## 4. Using the countdown timer (`CD` mode)
 
-This is for timing down to a specific moment — an approach fix, a hold, a departure slot — with an alarm so you don't have to keep watching it.
+This is for timing down to a specific moment — an approach fix, a hold, a departure slot — with an alarm so you don't have to keep watching it. Like the chronograph, the screen stays awake the whole time you're on this screen — dialing, running, or sitting at a finished countdown — so switching to `CD` mode is enough on its own; you don't need to be actively running the timer to keep the display lit.
 
 ### Setting the time
 
@@ -80,9 +80,9 @@ This is for timing down to a specific moment — an approach fix, a hold, a depa
 - **Single beep + a vibration pulse** at 10 seconds remaining.
 - **Double beep + two vibration pulses** at 5 seconds remaining.
 - At **00:00:00**, a looping alarm (sound + vibration together) continues until you dismiss it — tap either half of the lower LCD, or just start turning the bezel again.
+- If you don't dismiss it, the display keeps counting **upward past zero** as overtime, shown as `-:MM:SS` (the hour digits are blanked out and replaced with the `-` sign, so the figures stay the same size — nothing jumps around on you).
 
 Every alert vibrates as well as sounds, so it still gets your attention with a headset on, in a noisy cockpit, or with the watch muted.
-- If you don't dismiss it, the display keeps counting **upward past zero** as overtime, shown as `-:MM:SS` (the hour digits are blanked out and replaced with the `-` sign, so the figures stay the same size — nothing jumps around on you).
 
 ### Changing your mind mid-countdown
 
@@ -108,5 +108,5 @@ You can retime it at any point, running or not:
 - **Bezel/crown does nothing:** it only responds while you're in `CD` mode — turning it in `NORMAL`/`CHR`/`CHR 1/100` mode has no effect by design. If you're testing in the Wear OS emulator rather than a real watch, note that the on-screen crown graphic on the watch face image does **not** send rotary input — use the emulator's **⋯ (Extended controls) → Rotary input** panel instead.
 - **Alarm won't stop:** tap either half of the lower LCD, or just start turning the bezel — both silence it immediately.
 - **Can't hear the beeps/alarm in the emulator:** this is normal — desktop emulator audio output isn't always routed the way you'd expect, and you obviously can't feel emulator vibration either. Every alert also fires a real vibration pulse on-device, so a physical watch (or a headset-wearing pilot) still gets the alert even if the speaker isn't audible.
-- **Screen turns off mid-approach:** the screen-awake lock only engages in `CHR` (not `CHR 1/100` or `CD`) — see §3. If you need the countdown timer to keep the screen on too, that's currently not automatic; keep the watch active or tap the screen periodically.
+- **Screen turns off mid-approach:** shouldn't happen — the screen-awake lock holds the display on for the entire time you're on `CHR`, `CHR 1/100`, or `CD`, running or not. It only lets go in `NORMAL` mode. If you *do* see it sleep on one of the timing screens, that's a bug — worth reporting.
 - **Lost your countdown value:** switching away from `CD` mode and back does not clear it — your dialed/running value is preserved. Only an explicit reset (left tap while paused) clears it to zero.

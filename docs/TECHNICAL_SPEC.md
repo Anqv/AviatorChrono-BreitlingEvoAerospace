@@ -159,7 +159,7 @@ Each `LcdColor` entry carries its own `onColor` (active segment) and `offColor` 
 **Computed properties:**
 
 ```kotlin
-isNavigationActive = lockPreference == AUTO && running && watchMode == CHR
+isNavigationActive = lockPreference == AUTO && watchMode != NORMAL
 currentElapsedMs(nowMs) = if (running) elapsedMs + (nowMs - startedAtMs) else elapsedMs
 ```
 
@@ -439,13 +439,15 @@ All touch is handled by a single `detectTapGestures` dispatcher attached to a fu
 
 ## 11. Screen-Awake Lock
 
-The lock engages automatically when all three conditions hold simultaneously:
+The lock engages automatically whenever both conditions hold:
 
 ```kotlin
-isNavigationActive = (lockPreference == AUTO) && running && (watchMode == CHR)
+isNavigationActive = (lockPreference == AUTO) && (watchMode != NORMAL)
 ```
 
-The rationale: hundredths mode implies a short-duration stopwatch context (not navigation), so the lock is released to save battery. In NORMAL mode the chrono is not running, so the lock is never engaged there either.
+The rationale: a pilot relying on `CHR`, `CHR 1/100`, or `CD` needs the display to stay lit for as long as that screen is up — not just while a timer happens to be running. A paused split, a countdown mid-dial on the bezel, or a countdown sitting at zero waiting to be dismissed are all moments the screen must not go dark. `NORMAL` mode is the only state allowed to sleep/go ambient, since that's ordinary everyday-watch use.
+
+(An earlier version only engaged the lock in `CHR` mode while actually running, on the theory that `CHR 1/100` implied a short stopwatch burst not worth the battery cost, and that `COUNTDOWN` didn't need it at all. That undercounted the countdown timer's screen-awake needs entirely, so the condition was widened to the whole non-`NORMAL` mode range.)
 
 `onPause()` always clears `FLAG_KEEP_SCREEN_ON` — the lock can never persist after the app is backgrounded.
 

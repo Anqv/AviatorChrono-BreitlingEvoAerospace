@@ -109,11 +109,13 @@ class ChronoState {
         countdownAlarmActive = true
     }
 
-    // Screen-awake lock: only in CHR (seconds) mode while running
+    // Screen-awake lock: held for the entire time a timing mode is on screen — CHR,
+    // CHR_HUNDREDTHS, or COUNTDOWN — not just while actually running. A pilot mid-approach
+    // reading a paused split, or mid-dial on a countdown bezel turn, still needs the
+    // display to stay lit; only NORMAL mode is allowed to sleep/go ambient as usual.
     val isNavigationActive: Boolean
         get() = lockPreference == LockPreference.AUTO &&
-                running &&
-                watchMode == WatchMode.CHR
+                watchMode != WatchMode.NORMAL
 
     fun currentElapsedMs(nowMs: Long): Long =
         if (running) elapsedMs + (nowMs - startedAtMs) else elapsedMs

@@ -22,7 +22,7 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 - **Four display modes** — cycled by tapping the upper LCD: `NORMAL` → `CHR` → `CHR 1/100` → `CD` → `NORMAL`
 - **Five LCD colours** — tap anywhere on the dial (outside the LCD panels and hub) to cycle: Amber → Green → Red → Blue → Yellow
 - **Hand parking** — tap the centre hub to park the hour hand at 3, minute hand at 9, and hide the second hand; tap again to unpark
-- **Screen-awake lock** — holds the display on automatically while the chronograph is running in CHR (seconds) mode
+- **Screen-awake lock** — holds the display on automatically the whole time you're on the chronograph (`CHR`/`CHR 1/100`) or countdown (`CD`) screen, running or not; only `NORMAL` mode is allowed to sleep/go ambient
 
 ---
 

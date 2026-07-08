@@ -77,9 +77,11 @@ This is for timing down to a specific moment — an approach fix, a hold, a depa
 
 ### While it's running
 
-- **Single beep** at 10 seconds remaining.
-- **Double beep** at 5 seconds remaining.
-- At **00:00:00**, a looping alarm sounds continuously until you dismiss it — tap either half of the lower LCD, or just start turning the bezel again.
+- **Single beep + a vibration pulse** at 10 seconds remaining.
+- **Double beep + two vibration pulses** at 5 seconds remaining.
+- At **00:00:00**, a looping alarm (sound + vibration together) continues until you dismiss it — tap either half of the lower LCD, or just start turning the bezel again.
+
+Every alert vibrates as well as sounds, so it still gets your attention with a headset on, in a noisy cockpit, or with the watch muted.
 - If you don't dismiss it, the display keeps counting **upward past zero** as overtime, shown as `-:MM:SS` (the hour digits are blanked out and replaced with the `-` sign, so the figures stay the same size — nothing jumps around on you).
 
 ### Changing your mind mid-countdown
@@ -105,5 +107,6 @@ You can retime it at any point, running or not:
 
 - **Bezel/crown does nothing:** it only responds while you're in `CD` mode — turning it in `NORMAL`/`CHR`/`CHR 1/100` mode has no effect by design. If you're testing in the Wear OS emulator rather than a real watch, note that the on-screen crown graphic on the watch face image does **not** send rotary input — use the emulator's **⋯ (Extended controls) → Rotary input** panel instead.
 - **Alarm won't stop:** tap either half of the lower LCD, or just start turning the bezel — both silence it immediately.
+- **Can't hear the beeps/alarm in the emulator:** this is normal — desktop emulator audio output isn't always routed the way you'd expect, and you obviously can't feel emulator vibration either. Every alert also fires a real vibration pulse on-device, so a physical watch (or a headset-wearing pilot) still gets the alert even if the speaker isn't audible.
 - **Screen turns off mid-approach:** the screen-awake lock only engages in `CHR` (not `CHR 1/100` or `CD`) — see §3. If you need the countdown timer to keep the screen on too, that's currently not automatic; keep the watch active or tap the screen periodically.
 - **Lost your countdown value:** switching away from `CD` mode and back does not clear it — your dialed/running value is preserved. Only an explicit reset (left tap while paused) clears it to zero.

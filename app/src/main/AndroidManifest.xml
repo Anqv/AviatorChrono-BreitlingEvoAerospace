@@ -4,6 +4,9 @@
     <!-- Standalone: installs and runs without requiring a paired phone app -->
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
 
+    <!-- Countdown timer alarm/beep vibration (normal permission, granted at install) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

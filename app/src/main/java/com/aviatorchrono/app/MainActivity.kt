@@ -4,7 +4,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -84,9 +88,21 @@ fun AviatorChronoScreen(
 ) {
     var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
 
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val toneGen = remember { ToneGenerator(AudioManager.STREAM_ALARM, 90) }
     DisposableEffect(Unit) { onDispose { toneGen.release() } }
+    val vibrator = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Vibrator::class.java)
+        }
+    }
+    fun buzz(ms: Long) {
+        vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
 
     LaunchedEffect(Unit) {
         var prevCountdownRemaining: Long? = null
@@ -99,12 +115,15 @@ fun AviatorChronoScreen(
                 if (prev != null) {
                     if (prev > 10_000L && remaining <= 10_000L) {
                         toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+                        buzz(150)
                     }
                     if (prev > 5_000L && remaining <= 5_000L) {
                         coroutineScope.launch {
                             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                            buzz(120)
                             delay(180)
                             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                            buzz(120)
                         }
                     }
                     if (prev > 0L && remaining <= 0L) chrono.armCountdownAlarm()
@@ -122,6 +141,7 @@ fun AviatorChronoScreen(
     LaunchedEffect(chrono.countdownAlarmActive) {
         while (chrono.countdownAlarmActive && isActive) {
             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 200)
+            buzz(300)
             delay(500)
         }
     }
@@ -130,7 +150,6 @@ fun AviatorChronoScreen(
         onNavigationActiveChanged(chrono.isNavigationActive)
     }
 
-    val context = LocalContext.current
     val bgBitmap = remember {
         BitmapFactory.decodeResource(context.resources, R.drawable.watch_face_clean_blue)
     }

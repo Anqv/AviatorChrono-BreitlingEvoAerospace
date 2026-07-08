@@ -522,19 +522,21 @@ countdownBaseMs = countdownSetMs - dialElapsed
 
 So the countdown behaves as if it had already been running for the duration it took to dial it in. The same subtraction applies on every re-dial/re-start cycle, including mid-flight time changes — turning the bezel while running always freezes the live value into `countdownSetMs` first (via `adjustCountdown`), so the pilot is always adjusting from the current remaining time, not from zero.
 
-### 14.3 Beeps and alarm
+### 14.3 Beeps, vibration, and alarm
 
 `MainActivity`'s 100 Hz→10 Hz tick loop (§3.1) additionally tracks the previous tick's `currentCountdownRemainingMs` while in COUNTDOWN mode and edge-detects three thresholds (crossing from above to at-or-below):
 
-| Threshold | Sound |
-|---|---|
-| 10 s remaining | Single beep (`ToneGenerator.TONE_PROP_BEEP`, 150 ms) |
-| 5 s remaining | Double beep (two 120 ms tones, ~180 ms apart, fired via `rememberCoroutineScope()` so it doesn't stall the tick loop) |
-| 0 s (countdown complete) | `chrono.armCountdownAlarm()` sets `countdownAlarmActive = true` |
+| Threshold | Sound | Vibration |
+|---|---|---|
+| 10 s remaining | Single beep (`ToneGenerator.TONE_PROP_BEEP`, 150 ms) | Single 150 ms pulse |
+| 5 s remaining | Double beep (two 120 ms tones, ~180 ms apart, fired via `rememberCoroutineScope()` so it doesn't stall the tick loop) | Two 120 ms pulses, same timing as the tones |
+| 0 s (countdown complete) | `chrono.armCountdownAlarm()` sets `countdownAlarmActive = true` | (see below) |
 
-All tones play on `AudioManager.STREAM_ALARM` via a single `remember`-scoped `ToneGenerator`, released in a `DisposableEffect` — no manifest permission required.
+All tones play on `AudioManager.STREAM_ALARM` via a single `remember`-scoped `ToneGenerator`, released in a `DisposableEffect`.
 
-While `countdownAlarmActive` is true, a `LaunchedEffect(chrono.countdownAlarmActive)` loops `TONE_PROP_BEEP2` every 500 ms. Compose cancels this effect automatically the instant the flag flips back to `false`, which happens as a side effect of *any* lower-LCD tap or bezel turn while COUNTDOWN mode is active — giving "ring until dismissed" behavior without any dedicated dismiss button.
+Vibration exists so the alarm still gets noticed with a headset on, in a loud cockpit, or with the watch muted — sound alone can't be relied on for a safety-relevant alert. A single `Vibrator` (`VibratorManager.defaultVibrator` on API 31+, the deprecated-but-functional direct `Vibrator` service below that, since `minSdk` is 30) is obtained once via `remember`, and a small `buzz(ms)` helper fires a `VibrationEffect.createOneShot(ms, DEFAULT_AMPLITUDE)` alongside every tone above. This is the one feature in the app that needs a manifest permission: `android.permission.VIBRATE` (normal protection level, granted automatically at install — no runtime prompt).
+
+While `countdownAlarmActive` is true, a `LaunchedEffect(chrono.countdownAlarmActive)` loops `TONE_PROP_BEEP2` + a 300 ms vibration pulse every 500 ms. Compose cancels this effect automatically the instant the flag flips back to `false`, which happens as a side effect of *any* lower-LCD tap or bezel turn while COUNTDOWN mode is active — giving "ring until dismissed" behavior (for both the sound and the vibration) without any dedicated dismiss button.
 
 ### 14.4 Bezel input wiring
 

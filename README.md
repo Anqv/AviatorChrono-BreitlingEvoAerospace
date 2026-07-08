@@ -18,7 +18,7 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 - **Upper LCD panel** — shows date (`MON 07 JUL`) in NORMAL mode; switches to `CHR` or `CHR 1-100` label when the chronograph is active
 - **Lower LCD panel** — shows UTC time (`HH:MM:SS`) in NORMAL mode; switches to chronograph readout when timing; a vertical divider marks the STOP|RESET / START zone boundary
 - **Lap / split timer** — freeze the lower LCD at a split time while the chrono keeps running in the background; tap again to resume the live display
-- **Countdown timer** — dial in a `HH:MM:SS` countdown with the bezel/rotating crown, start it from the lower LCD, and get a beep at 10s, a double beep at 5s, and a looping alarm at zero (counts up as overtime afterward, shown as ` -:MM:SS`)
+- **Countdown timer** — dial in a `HH:MM:SS` countdown with the bezel/rotating crown, start it from the lower LCD, and get a beep + vibration at 10s, a double beep + double vibration at 5s, and a looping alarm (sound + vibration) at zero (counts up as overtime afterward, shown as ` -:MM:SS`)
 - **Four display modes** — cycled by tapping the upper LCD: `NORMAL` → `CHR` → `CHR 1/100` → `CD` → `NORMAL`
 - **Five LCD colours** — tap anywhere on the dial (outside the LCD panels and hub) to cycle: Amber → Green → Red → Blue → Yellow
 - **Hand parking** — tap the centre hub to park the hour hand at 3, minute hand at 9, and hide the second hand; tap again to unpark
@@ -66,7 +66,7 @@ A Wear OS chronograph app styled after the **Breitling EVO Aerospace**, with aut
 
 ### Countdown timer (`CD` mode)
 
-Turn the bezel to dial in a duration — clockwise increases it, counter-clockwise decreases it, and faster turns move it faster. Tap the lower LCD's right half to start; the timer begins counting down from your dialed value **minus** however long it took you to dial it in (so it accounts for the time you spent setting it). A single beep sounds at 10 seconds remaining, a double beep at 5 seconds, and a looping alarm at zero — silence it by tapping either half of the lower LCD or by turning the bezel to set a new time. Past zero, the display counts up as overtime with the hour digits replaced by a blank cell and a `-` sign (e.g. ` -:00:12`), keeping the figures the same size as the countdown that preceded it. You can change the time and restart at any point, including mid-countdown — turning the bezel always pauses the running timer first so you're adjusting from the current remaining time.
+Turn the bezel to dial in a duration — clockwise increases it, counter-clockwise decreases it, and faster turns move it faster. Tap the lower LCD's right half to start; the timer begins counting down from your dialed value **minus** however long it took you to dial it in (so it accounts for the time you spent setting it). A single beep and vibration pulse sound at 10 seconds remaining, a double beep and double vibration at 5 seconds, and a looping alarm (sound + vibration) at zero — silence it by tapping either half of the lower LCD or by turning the bezel to set a new time. The vibration is there so the alarm still gets noticed with a headset on or the watch on silent. Past zero, the display counts up as overtime with the hour digits replaced by a blank cell and a `-` sign (e.g. ` -:00:12`), keeping the figures the same size as the countdown that preceded it. You can change the time and restart at any point, including mid-countdown — turning the bezel always pauses the running timer first so you're adjusting from the current remaining time.
 
 > **Testing in the emulator:** the on-screen crown/bezel graphic on the watch face does *not* send rotary input. Use the emulator toolbar's **⋯ → Rotary input** panel to simulate bezel/crown rotation.
 
@@ -111,7 +111,7 @@ The APK ends up at `app/build/outputs/apk/debug/app-debug.apk`.
 AviatorChronoApp/
 ├── watch_face_clean_blue.png          Breitling dial artwork (background)
 └── app/src/main/
-    ├── AndroidManifest.xml            Standalone Wear app, no permissions
+    ├── AndroidManifest.xml            Standalone Wear app; only android.permission.VIBRATE (normal, install-time)
     ├── res/drawable/
     │   ├── watch_face_clean_blue.png  Runtime copy of the dial image
     │   └── jas_plane.png              Aviation-red JAS aircraft (chrono hand tip)

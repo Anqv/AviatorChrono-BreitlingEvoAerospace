@@ -30,3 +30,20 @@ device. User has not yet decided whether to fix it.
   ambient/screen-off still kicks in normally, don't leave it running unattended on the
   charger during early tests).
 - Decide on and possibly fix the chrono-hand/date-digit overlap above.
+
+---
+
+## 2026-08-29 (later) — Moved project out of OneDrive
+
+Android Studio hit "Unable to delete directory ... Failed to delete some children" on a
+rebuild — classic Gradle-on-OneDrive file-lock issue (the project lived under
+`OneDrive\Documents\ClaudeWS\WearOS\...`, and OneDrive's sync engine transiently locks
+files that Gradle's incremental build needs to rewrite).
+
+**Fix applied:** moved the whole project to
+`C:\Users\ander\workspace\WearOS\AviatorChrono-BreitlingEvoAerospace` (outside any
+OneDrive-synced folder). Git history/remote tracking intact, confirmed in sync with
+`origin/master`. User reopened the project from the new location in Android Studio and
+confirmed it works. **All future work should use this new path** — the OneDrive copy's
+contents were purged (an empty leftover folder may briefly remain there until OneDrive's
+sync engine releases it; harmless, safe to delete manually if it lingers).
